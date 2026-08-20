@@ -110,20 +110,29 @@ header {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(0, 0, 0, 0.45);
+  background: #111827;
   border: 1px solid var(--border-glow);
   padding: 0.3rem 0.65rem;
   border-radius: var(--radius-full);
 }
 
 .selector-pill select {
-  background: transparent;
+  background: #111827;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 0.82rem;
   border: none;
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.8rem;
   outline: none;
   cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* Explicit option colors for all browsers */
+select option {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  padding: 8px 12px;
 }
 
 /* Auth Dropdown */
