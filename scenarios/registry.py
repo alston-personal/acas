@@ -22,6 +22,19 @@ class ScenarioRegistry:
     def list_all(self) -> List[Scenario]:
         return list(self._scenarios.values())
 
+    def get_by_domain(self, domain: str) -> List[Scenario]:
+        return [s for s in self._scenarios.values() if s.domain == domain]
+
+    def find_best_scenario_for_skills(self, skills: List[str], domain: Optional[str] = None) -> Scenario:
+        candidates = self.get_by_domain(domain) if domain else self.list_all()
+        if not candidates:
+            candidates = self.list_all()
+        for s in candidates:
+            for sk in skills:
+                if sk in s.prompt_data.target_skills_universal:
+                    return s
+        return candidates[0] if candidates else self.list_all()[0]
+
     def _load_standard_scenarios(self):
         # 1. Weather Plan (Condition / Negation)
         self.register(Scenario(
@@ -166,3 +179,4 @@ class ScenarioRegistry:
 
 
 global_scenario_registry = ScenarioRegistry()
+global_scenarios = global_scenario_registry

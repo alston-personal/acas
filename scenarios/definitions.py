@@ -9,15 +9,11 @@ from core.ir_schema import CommunicationIR
 
 
 class MultilingualPrompt(BaseModel):
-    # Target Language Prompts
-    prompts_target: Dict[str, str] = Field(default_factory=dict) # e.g. {"ja": "...", "es": "...", "en": "..."}
-    # Native Language Translations
-    translations_native: Dict[str, str] = Field(default_factory=dict) # e.g. {"zh-TW": "...", "zh-CN": "...", "en": "..."}
-    # Native Language Hints
-    hints_native: Dict[str, str] = Field(default_factory=dict) # e.g. {"zh-TW": "...", "zh-CN": "...", "en": "..."}
-    
-    target_skills_universal: List[str] = Field(default_factory=list) # e.g. ["CORE.CONDITION", "CORE.NEGATION"]
-    target_skills_by_lang: Dict[str, List[str]] = Field(default_factory=dict) # {"ja": ["JP.CONDITION.TARA"], "es": ["ES.CONDITION.SI"]}
+    prompts_target: Dict[str, str] = Field(default_factory=dict)
+    translations_native: Dict[str, str] = Field(default_factory=dict)
+    hints_native: Dict[str, str] = Field(default_factory=dict)
+    target_skills_universal: List[str] = Field(default_factory=list)
+    target_skills_by_lang: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 class Scenario(BaseModel):
@@ -26,5 +22,9 @@ class Scenario(BaseModel):
     title_native: Dict[str, str] = Field(default_factory=dict)
     description_native: Dict[str, str] = Field(default_factory=dict)
     prompt_data: MultilingualPrompt
-    difficulty_level: int = 1 # 1: Novice, 2: Intermediate, 3: Advanced
+    difficulty_level: int = 1
     expected_ir: CommunicationIR
+
+
+ScenarioDefinition = Scenario
+ScenarioTurnTemplate = MultilingualPrompt

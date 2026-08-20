@@ -6,7 +6,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
-from core.memory_model import AdaptivePowerLawMemoryModel, MemoryState
+from core.memory_model import AdaptivePowerLawMemoryModel, MemoryState, default_memory_model
 
 
 class MasteryVector(BaseModel):
@@ -33,7 +33,10 @@ class MasteryVector(BaseModel):
 
 class SkillStatistics(BaseModel):
     exposure_count: int = 0
+    exposures: int = 0
     success_count: int = 0
+    successes: int = 0
+    failures: int = 0
     consecutive_correct: int = 0
     consecutive_incorrect: int = 0
     last_practiced_at: float = 0.0
@@ -52,12 +55,15 @@ class LearnerSkillState(BaseModel):
 
     def record_performance(self, success: bool, latency_ms: float, timestamp: float, weights: Optional[Dict[str, float]] = None):
         self.statistics.exposure_count += 1
+        self.statistics.exposures += 1
         if success:
             self.statistics.success_count += 1
+            self.statistics.successes += 1
             self.statistics.consecutive_correct += 1
             self.statistics.consecutive_incorrect = 0
             delta = 0.15
         else:
+            self.statistics.failures += 1
             self.statistics.consecutive_correct = 0
             self.statistics.consecutive_incorrect += 1
             delta = -0.08
@@ -78,9 +84,9 @@ class LearnerSkillState(BaseModel):
 
 class LearnerProfile(BaseModel):
     learner_id: str
-    native_language: str = "zh-TW" # "zh-TW", "zh-CN", "en"
-    target_language: str = "es"    # "es", "ja", "en"
-    current_difficulty_level: int = 1 # 1: Novice (Full Scaffolding), 2: Intermediate (Word Builder Only), 3: Fluent (Blind Direct Input)
+    native_language: str = "zh-TW"
+    target_language: str = "es"
+    current_difficulty_level: int = 1
     consecutive_global_correct: int = 0
     consecutive_global_errors: int = 0
     skills: Dict[str, LearnerSkillState] = Field(default_factory=dict)
@@ -91,21 +97,20 @@ class LearnerProfile(BaseModel):
             self.skills[skill_id] = LearnerSkillState(skill_id=skill_id)
         return self.skills[skill_id]
 
+    def get_or_create_skill_state(self, skill_id: str) -> LearnerSkillState:
+        return self.get_or_create_skill(skill_id)
+
     def update_adaptive_difficulty(self, success: bool):
-        """Dynamic difficulty adjustment based on performance streak."""
         if success:
             self.consecutive_global_correct += 1
             self.consecutive_global_errors = 0
-            # If 3 consecutive correct and currently at level 1 -> Level 2
             if self.consecutive_global_correct >= 3 and self.current_difficulty_level == 1:
                 self.current_difficulty_level = 2
-            # If 5 consecutive correct and level 2 -> Level 3
             elif self.consecutive_global_correct >= 6 and self.current_difficulty_level == 2:
                 self.current_difficulty_level = 3
         else:
             self.consecutive_global_correct = 0
             self.consecutive_global_errors += 1
-            # If error and higher level -> Step down
             if self.consecutive_global_errors >= 1 and self.current_difficulty_level == 3:
                 self.current_difficulty_level = 2
             elif self.consecutive_global_errors >= 2 and self.current_difficulty_level == 2:

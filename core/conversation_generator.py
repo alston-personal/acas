@@ -14,13 +14,12 @@ from pydantic import BaseModel
 from core.scheduler import SkillCluster
 from core.learner_model import LearnerProfile
 from scenarios.registry import ScenarioRegistry, global_scenarios
-from scenarios.definitions import ScenarioDefinition, ScenarioTurnTemplate
 
 
 class GeneratedPrompt(BaseModel):
     scenario_id: str
     domain: str
-    turn_index: int
+    turn_index: int = 1
     prompt_text_ja: str
     prompt_text_en: str
     target_skills: List[str]
@@ -42,31 +41,21 @@ class ConversationGenerator:
         scenario = self.scenario_registry.find_best_scenario_for_skills(target_skills, domain=skill_cluster.domain)
         
         if not scenario:
-            scenario = self.scenario_registry.get_all()[0]
+            scenario = self.scenario_registry.list_all()[0]
 
-        turns = scenario.turns
-        turn = None
-        for t in turns:
-            if t.turn_id == turn_index:
-                turn = t
-                break
-        if not turn:
-            turn = turns[0] if turns else ScenarioTurnTemplate(
-                turn_id=1,
-                ai_prompt_text_ja="日本に住むなら、どこに住みたい？",
-                ai_prompt_text_en="If you were to live in Japan, where would you want to live?",
-                target_skills=["JP.CONDITION.NARA", "JP.DESIRE.TAI"],
-                expected_ir_pattern={"predicate": "LIVE"},
-                hints="Answer naturally with condition and preference.",
-            )
+        pdata = scenario.prompt_data
+        prompt_ja = pdata.prompts_target.get("ja", "明日雨が降ったら、どうしますか？")
+        prompt_en = pdata.translations_native.get("en", "If it rains tomorrow, what will you do?")
+        hints = pdata.hints_native.get(profile.native_language, pdata.hints_native.get("zh-TW", ""))
+        skills = pdata.target_skills_by_lang.get(profile.target_language, pdata.target_skills_universal)
 
         return GeneratedPrompt(
             scenario_id=scenario.scenario_id,
             domain=scenario.domain,
-            turn_index=turn.turn_id,
-            prompt_text_ja=turn.ai_prompt_text_ja,
-            prompt_text_en=turn.ai_prompt_text_en,
-            target_skills=turn.target_skills,
-            hints=turn.hints,
-            expected_ir=turn.expected_ir_pattern,
+            turn_index=turn_index,
+            prompt_text_ja=prompt_ja,
+            prompt_text_en=prompt_en,
+            target_skills=skills,
+            hints=hints,
+            expected_ir=scenario.expected_ir.model_dump() if hasattr(scenario.expected_ir, 'model_dump') else {},
         )
