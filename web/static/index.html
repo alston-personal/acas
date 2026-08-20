@@ -42,7 +42,7 @@
         </select>
       </div>
 
-      <button class="btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" onclick="openTutorialModal()">❓ 新手玩法引導</button>
+      <button class="btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" onclick="openTutorialModal()">❓ 新手引導</button>
     </div>
 
     <nav>
@@ -60,18 +60,29 @@
     <!-- 1. Live Interactive Session Tab -->
     <section id="session-tab" class="tab-pane active">
       
-      <!-- Clear Mission & Goal Banner -->
+      <!-- Clear Mission & Goal Banner with Adaptive Difficulty Badge -->
       <div class="mission-box">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div class="mission-tag">🚩 當前學習任務 (Current Mission)</div>
-          <div id="target-skill-badge" style="font-size: 0.75rem; color: var(--accent-cyan); font-family: monospace;">CORE.CONDITION</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <div class="mission-tag">🚩 當前學習任務 (CURRENT MISSION)</div>
+          
+          <!-- Dynamic Adaptive Difficulty Ladder Badge -->
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div id="difficulty-badge" style="background: rgba(255, 184, 0, 0.2); border: 1px solid var(--accent-amber); color: #fbbf24; padding: 0.2rem 0.6rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 700;">
+              ⭐ Level 1: 入門全引導 (Novice)
+            </div>
+            <div id="target-skill-badge" style="font-size: 0.75rem; color: var(--accent-cyan); font-family: monospace; background: rgba(0,242,254,0.15); padding:0.2rem 0.5rem; border-radius:var(--radius-sm);">
+              CORE.CONDITION
+            </div>
+          </div>
         </div>
+        
         <div id="mission-goal-text" class="mission-goal">
           任務：回答當明天下雨時，你的應對行動（練習條件句表達）。
         </div>
-        <div class="formula-bar">
+        
+        <div id="formula-container" class="formula-bar">
           <span>📐 語句結構公式：</span>
-          <span id="mission-formula" class="formula-chip">[Si 如果] + [llueve 下雨], [no voy 我不去]</span>
+          <span id="mission-formula" class="formula-chip">[Si 如果] + [llueve 下雨], [no saldré / no voy 我不出門]</span>
         </div>
       </div>
 
@@ -80,32 +91,42 @@
           <div class="card-title">
             <span>🤖 情境對話 (<span id="current-lang-display" style="color:var(--accent-cyan);">🇪🇸 西班牙語</span>)</span>
             <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
-              <label style="font-size: 0.8rem; color: var(--accent-amber); display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
-                <input type="checkbox" id="beginner-mode-toggle" checked onchange="toggleBeginnerMode()">
-                🔰 初學者引導模式 (Beginner Mode)
-              </label>
+              <span id="difficulty-streak-tip" style="font-size: 0.75rem; color: #94a3b8;">連續正確: 0 次</span>
               <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="loadNextTurn()">Next Turn ➔</button>
             </div>
           </div>
           
           <div id="chat-messages" class="chat-messages"></div>
 
-          <!-- Beginner Interactive Scaffolding Panel -->
+          <!-- Beginner Interactive Scaffolding Panel (Adapts dynamically by Difficulty Level) -->
           <div id="scaffolding-panel" class="scaffolding-box">
-            <div class="scaffolding-title">
-              <span>🧩 零基礎一鍵選句 (點擊直接填入)：</span>
-            </div>
-            <div id="quick-options-container" class="chips-container"></div>
             
-            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.6rem; display: flex; justify-content: space-between; align-items: center;">
-              <span>🧱 單詞積木拼句 (點擊積木依序拼裝)：</span>
-              <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.7rem;" onclick="clearInput()">↺ 清空重拼</button>
+            <!-- Quick Options: Hidden on Level 2 & Level 3 -->
+            <div id="quick-options-wrapper">
+              <div class="scaffolding-title">
+                <span>🧩 零基礎一鍵選句 (點擊直接填入)：</span>
+              </div>
+              <div id="quick-options-container" class="chips-container"></div>
             </div>
-            <div id="word-chips-container" class="word-builder-box"></div>
+            
+            <!-- Word Builder: Hidden on Level 3 -->
+            <div id="word-builder-wrapper" style="margin-top: 0.6rem;">
+              <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+                <span>🧱 單詞積木拼句 (點擊積木依序拼裝)：</span>
+                <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.7rem;" onclick="clearInput()">↺ 清空重拼</button>
+              </div>
+              <div id="word-chips-container" class="word-builder-box"></div>
+            </div>
+
+            <!-- Level 3 Direct Input Notice -->
+            <div id="advanced-notice" style="display: none; padding: 0.5rem; color: var(--accent-green); font-size: 0.8rem; text-align: center;">
+              🔥 已晉級至「⭐⭐⭐ 流利直覺模式」：請直接在下方輸入目標語言作答（或輸入母語意圖）！
+            </div>
+
           </div>
 
           <div class="chat-input-bar">
-            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入目標語言、中文意向 (如: 下雨就不出門)，或點選上方積木..." onkeypress="handleKeyPress(event)">
+            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入目標語言、母語意向 (如: 下雨就不出門)，或點選上方積木..." onkeypress="handleKeyPress(event)">
             <button class="btn-secondary" onclick="clearInput()">清空</button>
             <button class="btn-primary" onclick="submitResponse()">送出 ➔</button>
           </div>
@@ -113,7 +134,7 @@
 
         <div class="analytics-panel">
           <div class="glass-card">
-            <div class="card-title">⚡ 評估回饋與反應延遲 (Performance)</div>
+            <div class="card-title">⚡ 評估回饋與自適應指標 (Performance)</div>
             <div class="metric-grid">
               <div class="metric-box">
                 <div class="metric-label">反應速度 (Latency)</div>
@@ -219,11 +240,11 @@
     <!-- 5. Simulation Runner Tab -->
     <section id="sim-tab" class="tab-pane">
       <div class="glass-card">
-        <div class="card-title">🚀 間隔學習模擬驗證 (Spaced Learning Simulation)</div>
+        <div class="card-title">🚀 自適應難度與間隔學習模擬驗證 (Spaced & Adaptive Simulation)</div>
         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-          執行批次回合模擬，驗證 Memory Model 的記憶保持率曲線與 Scheduler 優先級權重動態調整。
+          執行批次回合模擬，驗證隨著正確率提升，難度自適應從 Level 1 (入門) ➔ Level 2 (進階) ➔ Level 3 (流利) 動態調整。
         </p>
-        <button class="btn-primary" onclick="runSim(10)">執行 10 回合自適應學習模擬 ➔</button>
+        <button class="btn-primary" onclick="runSim(10)">執行 10 回合自適應難度模擬 ➔</button>
         <div style="margin-top: 1.25rem;">
           <pre id="sim-output" class="ir-tree-viewer" style="max-height: 350px;">// Simulation logs will appear here...</pre>
         </div>
@@ -263,9 +284,9 @@
       <div class="modal-step">
         <div class="step-num">3</div>
         <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">送出並觀察 Universal IR 與能力成長</div>
+          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">自適應升降難度與能力成長</div>
           <div style="font-size:0.85rem; color:#94a3b8;">
-            送出後右側會即時解析出語言無關的 Universal IR 意圖樹，並更新你的自動化反應延遲與多維記憶能力！
+            連對時系統會自動進階（隱藏選句 ➔ 隱藏積木），出錯時會自動降級提供更多鷹架輔助！
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@
 ACAS Web API Application
 
 FastAPI Backend providing full endpoints for interactive conversation,
-skill graph exploration, IR bidirectional conversion, and learner mastery analytics.
+skill graph exploration, IR bidirectional conversion, and dynamic adaptive difficulty.
 """
 
 import time
@@ -17,6 +17,7 @@ from engine.session import ACASSessionEngine
 from core.skill_graph import global_skill_graph
 from core.validator import IRValidator
 from core.ir_schema import CommunicationIR
+from scenarios.registry import global_scenario_registry
 from languages.ja.adapter import JapaneseAdapter
 from languages.en.adapter import EnglishAdapter
 from languages.es.adapter import SpanishAdapter
@@ -37,50 +38,53 @@ en_adapter = EnglishAdapter()
 es_adapter = SpanishAdapter()
 
 
-def get_engine(learner_id: str = "web_user", target_language: str = "ja") -> ACASSessionEngine:
-    key = f"{learner_id}_{target_language}"
+def get_engine(learner_id: str = "web_user", native_language: str = "zh-TW", target_language: str = "es") -> ACASSessionEngine:
+    key = f"{learner_id}_{native_language}_{target_language}"
     if key not in engines:
         engine = ACASSessionEngine(learner_id=learner_id)
-        engine.goal.language = target_language
+        engine.profile.native_language = native_language
         engine.profile.target_language = target_language
+        engine.goal.language = target_language
         if target_language == "es":
             engine.analyzer.adapter = es_adapter
-        elif target_language == "en":
-            engine.analyzer.adapter = en_adapter
-        else:
+        elif target_language == "ja":
             engine.analyzer.adapter = ja_adapter
+        else:
+            engine.analyzer.adapter = en_adapter
         engines[key] = engine
     return engines[key]
 
 
 class NextTurnRequest(BaseModel):
     learner_id: str = "web_user"
-    target_language: str = "ja"
+    native_language: str = "zh-TW"
+    target_language: str = "es"
     domain: Optional[str] = None
 
 
 class SubmitResponseRequest(BaseModel):
     learner_id: str = "web_user"
-    target_language: str = "ja"
+    native_language: str = "zh-TW"
+    target_language: str = "es"
     response_text: str
     latency_ms: float
 
 
 class IRTransformRequest(BaseModel):
-    source_language: str  # "ja", "en", "es", "ir"
+    source_language: str
     text_or_json: str
-    target_language: str  # "ja", "en", "es", "ir"
+    target_language: str
 
 
 class SimulationRequest(BaseModel):
     learner_id: str = "sim_user"
-    target_language: str = "ja"
+    target_language: str = "es"
     turns: int = 15
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "version": "0.1", "system": "ACAS Universal Communication IR", "supported_languages": ["ja", "es", "en"]}
+    return {"status": "online", "version": "0.1", "system": "ACAS Universal Communication IR"}
 
 
 @app.get("/api/skills")
@@ -94,8 +98,8 @@ def get_skills():
 
 
 @app.get("/api/progress/{learner_id}")
-def get_progress(learner_id: str, target_language: str = "ja"):
-    engine = get_engine(learner_id, target_language=target_language)
+def get_progress(learner_id: str, native_language: str = "zh-TW", target_language: str = "es"):
+    engine = get_engine(learner_id, native_language=native_language, target_language=target_language)
     prog = engine.compute_progress()
     
     skill_states = {}
@@ -112,7 +116,10 @@ def get_progress(learner_id: str, target_language: str = "ja"):
 
     return {
         "goal_id": prog.goal_id,
+        "native_language": native_language,
         "target_language": target_language,
+        "difficulty_level": engine.profile.current_difficulty_level,
+        "consecutive_correct": engine.profile.consecutive_global_correct,
         "overall": prog.overall,
         "dimensions": prog.dimensions.model_dump(),
         "mastered_skills_count": prog.mastered_skills_count,
@@ -124,45 +131,47 @@ def get_progress(learner_id: str, target_language: str = "ja"):
 
 @app.post("/api/session/next-turn")
 def next_turn(req: NextTurnRequest):
-    engine = get_engine(req.learner_id, target_language=req.target_language)
-    prompt = engine.start_next_turn(domain=req.domain)
-    cluster = engine.current_cluster
+    engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
     
-    # Adapt prompt text based on target language
-    if req.target_language == "es":
-        # Spanish prompts
-        es_prompts = {
-            "daily.weather.plan": ("Si llueve mañana, ¿qué vas a hacer?", "¿Qué quieres hacer si llueve mañana?"),
-            "travel.restaurant.order": ("¡Bienvenido! ¿Qué desea pedir?", "¿Qué desea tomar?"),
-            "travel.hotel.checkin": ("Buenas tardes. ¿Tiene una reserva?", "¿Puede decirme su nombre?"),
-            "daily.opinion.chat": ("¿Ha estado en Japón alguna vez?", "¿Qué piensa del ramen?"),
-            "travel.direction.ask": ("Disculpe, ¿dónde está la estación?", "¿Cómo puedo llegar allí?"),
-        }
-        p_text, _ = es_prompts.get(prompt.scenario_id, ("Si llueve mañana, ¿qué vas a hacer?", "Welcome"))
-        display_prompt = p_text
-    else:
-        display_prompt = prompt.prompt_text_ja
+    # Retrieve structured scenario
+    all_scenarios = global_scenario_registry.list_all()
+    scenario = all_scenarios[(engine.session_turn_count) % len(all_scenarios)]
+    engine.session_turn_count += 1
+    engine.current_prompt = scenario.expected_ir # Set context
+
+    pdata = scenario.prompt_data
+    prompt_target = pdata.prompts_target.get(req.target_language, pdata.prompts_target.get("es", ""))
+    trans_native = pdata.translations_native.get(req.native_language, pdata.translations_native.get("zh-TW", ""))
+    hints_native = pdata.hints_native.get(req.native_language, pdata.hints_native.get("zh-TW", ""))
+    
+    # Clean language skills tag (No Japanese IDs shown when learning Spanish!)
+    target_skills = pdata.target_skills_by_lang.get(req.target_language, pdata.target_skills_universal)
 
     return {
         "turn_count": engine.session_turn_count,
-        "scenario_id": prompt.scenario_id,
-        "domain": prompt.domain,
+        "scenario_id": scenario.scenario_id,
+        "domain": scenario.domain,
+        "native_language": req.native_language,
         "target_language": req.target_language,
-        "prompt_target_lang": display_prompt,
-        "prompt_en": prompt.prompt_text_en,
-        "target_skills": prompt.target_skills,
-        "hints": prompt.hints,
-        "skill_cluster": cluster.model_dump() if cluster else None,
+        "difficulty_level": engine.profile.current_difficulty_level,
+        "prompt_target_lang": prompt_target,
+        "prompt_native_translation": trans_native,
+        "hints_native": hints_native,
+        "target_skills": target_skills,
+        "target_skills_universal": pdata.target_skills_universal,
     }
 
 
 @app.post("/api/session/submit")
 def submit_response(req: SubmitResponseRequest):
-    engine = get_engine(req.learner_id, target_language=req.target_language)
-    if not engine.current_prompt:
-        raise HTTPException(status_code=400, detail="No active prompt. Request /api/session/next-turn first.")
-
+    engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
+    
     analysis = engine.process_response(req.response_text, req.latency_ms)
+    
+    # Check success threshold
+    is_success = (analysis.grammar_accuracy >= 0.7 and analysis.semantic_correctness >= 0.7)
+    engine.profile.update_adaptive_difficulty(is_success)
+    
     progress = engine.compute_progress()
 
     return {
@@ -175,13 +184,15 @@ def submit_response(req: SubmitResponseRequest):
             "parsed_ir": analysis.parsed_ir,
             "latency_ms": req.latency_ms,
         },
+        "difficulty_level": engine.profile.current_difficulty_level,
+        "consecutive_correct": engine.profile.consecutive_global_correct,
+        "difficulty_changed": is_success,
         "progress": progress.model_dump(),
     }
 
 
 @app.post("/api/transform")
 def transform_ir(req: IRTransformRequest):
-    """Bidirectional transformation between JA ↔ ES ↔ EN ↔ IR."""
     try:
         if req.source_language == "ja":
             ir = ja_adapter.parse(req.text_or_json)
@@ -225,16 +236,14 @@ def run_simulation(req: SimulationRequest):
             ("Un vaso de agua, por favor.", 750.0),
             ("He estado en Japón.", 1450.0),
             ("Creo que es muy delicioso.", 1100.0),
-            ("Quiero vivir en Tokio.", 1200.0),
         ]
     else:
         simulated_responses = [
-            ("明日雨が降ったら、東京に行きません。", 1350.0),
+            ("明日雨が降ったら、行きません。", 1350.0),
             ("ラーメンを食べたいです。", 1050.0),
             ("お水をください。", 800.0),
             ("日本に行ったことがあります。", 1500.0),
             ("美味しいと思います。", 1150.0),
-            ("東京に住みたいです。", 1250.0),
         ]
 
     history = []
@@ -242,17 +251,18 @@ def run_simulation(req: SimulationRequest):
         resp, lat = simulated_responses[i % len(simulated_responses)]
         prompt = engine.start_next_turn()
         analysis = engine.process_response(resp, lat)
+        is_success = (analysis.grammar_accuracy >= 0.7)
+        engine.profile.update_adaptive_difficulty(is_success)
         prog = engine.compute_progress()
         history.append({
             "turn": engine.session_turn_count,
-            "scenario": prompt.scenario_id,
-            "target_skills": prompt.target_skills,
+            "target_language": req.target_language,
+            "difficulty_level": engine.profile.current_difficulty_level,
             "response": resp,
             "latency_ms": lat,
             "overall_mastery": prog.overall,
             "production": prog.dimensions.production,
             "retention": prog.dimensions.retention,
-            "automaticity": prog.dimensions.automaticity,
         })
 
     return {

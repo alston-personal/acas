@@ -1,175 +1,168 @@
 """
-Scenario Registry with 5+ Rich Conversational Scenarios
-
-Covers travel, dining, hotels, daily weather, opinions, and directions.
+Registry of standard conversation scenarios with clean native/target separation.
 """
 
 from typing import Dict, List, Optional
-from scenarios.definitions import ScenarioDefinition, ScenarioTurnTemplate
+from scenarios.definitions import Scenario, MultilingualPrompt
+from core.ir_schema import CommunicationIR, IntentNode, ContentNode
+from core.primitives import IntentPrimitive
 
 
 class ScenarioRegistry:
     def __init__(self):
-        self._scenarios: Dict[str, ScenarioDefinition] = {}
-        self._init_mvp_scenarios()
+        self._scenarios: Dict[str, Scenario] = {}
+        self._load_standard_scenarios()
 
-    def register(self, scenario: ScenarioDefinition):
+    def register(self, scenario: Scenario):
         self._scenarios[scenario.scenario_id] = scenario
 
-    def get(self, scenario_id: str) -> Optional[ScenarioDefinition]:
+    def get(self, scenario_id: str) -> Optional[Scenario]:
         return self._scenarios.get(scenario_id)
 
-    def get_all(self) -> List[ScenarioDefinition]:
+    def list_all(self) -> List[Scenario]:
         return list(self._scenarios.values())
 
-    def find_best_scenario_for_skills(self, target_skills: List[str], domain: Optional[str] = None) -> Optional[ScenarioDefinition]:
-        best_scenario = None
-        best_overlap = -1
+    def _load_standard_scenarios(self):
+        # 1. Weather Plan (Condition / Negation)
+        self.register(Scenario(
+            scenario_id="daily.weather.plan",
+            domain="daily",
+            title_native={
+                "zh-TW": "天氣與出行計劃",
+                "zh-CN": "天气与出行计划",
+                "en": "Weather & Travel Plan"
+            },
+            description_native={
+                "zh-TW": "練習當遇到天候變化時的假設條件句與否定表達。",
+                "zh-CN": "练习当遇到天气变化时的假设条件句与否定表达。",
+                "en": "Practice hypothetical condition and negation for weather plans."
+            },
+            difficulty_level=1,
+            prompt_data=MultilingualPrompt(
+                prompts_target={
+                    "ja": "明日雨が降ったら、どうしますか？",
+                    "es": "Si llueve mañana, ¿qué vas a hacer?",
+                    "en": "If it rains tomorrow, what will you do?"
+                },
+                translations_native={
+                    "zh-TW": "如果明天下雨，你打算做什麼？",
+                    "zh-CN": "如果明天下雨，你打算做什么？",
+                    "en": "If it rains tomorrow, what will you do?"
+                },
+                hints_native={
+                    "zh-TW": "表達條件與行動（例如：如果下雨我就不出門 / 待在家裡）",
+                    "zh-CN": "表达条件与行动（例如：如果下雨我就不出门 / 待在家里）",
+                    "en": "Express condition and consequence (e.g., If it rains, I will stay home / not go out)"
+                },
+                target_skills_universal=["CORE.CONDITION", "CORE.NEGATION"],
+                target_skills_by_lang={
+                    "ja": ["JP.CONDITION.TARA", "JP.NEGATION.NAI"],
+                    "es": ["ES.CONDITION.SI", "ES.NEGATION.NO"],
+                    "en": ["EN.CONDITION.IF", "EN.NEGATION.NOT"]
+                }
+            ),
+            expected_ir=CommunicationIR(
+                intent=IntentNode(type=IntentPrimitive.INFORM),
+                content=ContentNode(
+                    type="CONDITION",
+                    condition={"type": "EVENT", "predicate": "RAIN", "time": {"type": "TIME", "value": "tomorrow"}},
+                    consequence={"type": "NEGATION", "scope": {"type": "EVENT", "predicate": "GO"}}
+                )
+            )
+        ))
 
-        for scenario in self._scenarios.values():
-            if domain and scenario.domain != domain:
-                continue
-            overlap = len(set(target_skills).intersection(scenario.language_skills + scenario.required_skills))
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best_scenario = scenario
+        # 2. Restaurant Order (Desire / Request)
+        self.register(Scenario(
+            scenario_id="travel.restaurant.order",
+            domain="travel",
+            title_native={
+                "zh-TW": "餐廳點餐與需求",
+                "zh-CN": "餐厅点餐与需求",
+                "en": "Restaurant Ordering"
+            },
+            description_native={
+                "zh-TW": "練習在餐廳向店員點餐或索取水與菜單。",
+                "zh-CN": "练习在餐厅向店员点餐或索取水与菜单。",
+                "en": "Practice ordering food or asking for water/menu."
+            },
+            difficulty_level=1,
+            prompt_data=MultilingualPrompt(
+                prompts_target={
+                    "ja": "いらっしゃいませ！ご注文はお決まりですか？",
+                    "es": "¡Bienvenido! ¿Qué desea pedir?",
+                    "en": "Welcome! What would you like to order?"
+                },
+                translations_native={
+                    "zh-TW": "歡迎光臨！請問您決定好點什麼了嗎？",
+                    "zh-CN": "欢迎光临！请问您决定好点什么了吗？",
+                    "en": "Welcome! What would you like to order?"
+                },
+                hints_native={
+                    "zh-TW": "表達點餐渴望或禮貌請求（例如：我想吃拉麵 / 請給我一杯水）",
+                    "zh-CN": "表达点餐渴望或礼貌请求（例如：我想吃拉面 / 请给我一杯水）",
+                    "en": "Express desire or request (e.g., I want to eat ramen / Water, please)"
+                },
+                target_skills_universal=["CORE.DESIRE", "CORE.REQUEST"],
+                target_skills_by_lang={
+                    "ja": ["JP.DESIRE.TAI", "JP.REQUEST.KUDASAI"],
+                    "es": ["ES.DESIRE.QUIERO", "ES.REQUEST.PORFAVOR"],
+                    "en": ["EN.DESIRE.WANT", "EN.REQUEST.PLEASE"]
+                }
+            ),
+            expected_ir=CommunicationIR(
+                intent=IntentNode(type=IntentPrimitive.REQUEST),
+                content=ContentNode(type="ACTION", predicate="PROVIDE", arguments={"patient": {"type": "ENTITY", "concept": "RAMEN"}})
+            )
+        ))
 
-        return best_scenario or (self.get_all()[0] if self.get_all() else None)
-
-    def _init_mvp_scenarios(self):
-        scenarios = [
-            # 1. Travel Restaurant Order
-            ScenarioDefinition(
-                scenario_id="travel.restaurant.order",
-                domain="travel",
-                title="Restaurant Ordering & Requests",
-                description="Order dishes and ask the waiter for assistance/menu politely.",
-                required_skills=["CORE.REQUEST", "CORE.DESIRE", "CORE.INFORM"],
-                language_skills=["JP.REQUEST.KUDASAI", "JP.DESIRE.TAI", "JP.INFORM.DESU"],
-                vocabulary_domains=["food", "restaurant"],
-                difficulty=0.20,
-                turns=[
-                    ScenarioTurnTemplate(
-                        turn_id=1,
-                        ai_prompt_text_ja="いらっしゃいませ！何をご注文されますか？",
-                        ai_prompt_text_en="Welcome! What would you like to order?",
-                        target_skills=["JP.REQUEST.KUDASAI", "JP.DESIRE.TAI"],
-                        expected_ir_pattern={"predicate": "PROVIDE", "intent": "REQUEST"},
-                        hints="Try asking for the menu or ramen politely (e.g. ラーメンをください / ラーメンが食べたいです)",
-                    ),
-                    ScenarioTurnTemplate(
-                        turn_id=2,
-                        ai_prompt_text_ja="かしこまりました。お飲み物はいかがですか？",
-                        ai_prompt_text_en="Certainly. Would you like anything to drink?",
-                        target_skills=["JP.REQUEST.KUDASAI"],
-                        expected_ir_pattern={"predicate": "PROVIDE", "concept": "WATER"},
-                        hints="Ask for water (e.g. お水をください)",
-                    ),
-                ],
+        # 3. Travel Experience & Opinion
+        self.register(Scenario(
+            scenario_id="daily.opinion.chat",
+            domain="daily",
+            title_native={
+                "zh-TW": "旅遊經驗與心得",
+                "zh-CN": "旅游经验与心得",
+                "en": "Travel Experience & Opinion"
+            },
+            description_native={
+                "zh-TW": "練習分享過去旅遊經歷與個人主觀評價。",
+                "zh-CN": "练习分享过去旅游经历与个人主观评价。",
+                "en": "Practice sharing past experiences and personal thoughts."
+            },
+            difficulty_level=2,
+            prompt_data=MultilingualPrompt(
+                prompts_target={
+                    "ja": "日本に行ったことがありますか？ラーメンはどう思いますか？",
+                    "es": "¿Ha estado en Japón alguna vez? ¿Qué piensa del ramen?",
+                    "en": "Have you ever been to Japan? What do you think of ramen?"
+                },
+                translations_native={
+                    "zh-TW": "你曾去過日本嗎？你覺得拉麵怎麼樣？",
+                    "zh-CN": "你曾去过日本吗？你觉得拉面怎么样？",
+                    "en": "Have you ever been to Japan? What do you think of ramen?"
+                },
+                hints_native={
+                    "zh-TW": "表達經驗與看法（例如：我有去過日本 / 我覺得非常好吃）",
+                    "zh-CN": "表达经验与看法（例如：我有去过日本 / 我觉得非常美味）",
+                    "en": "Express experience and opinion (e.g., I have been to Japan / I think it is delicious)"
+                },
+                target_skills_universal=["CORE.EXPERIENCE", "CORE.OPINION"],
+                target_skills_by_lang={
+                    "ja": ["JP.EXPERIENCE.TAKOTOGAARU", "JP.OPINION.TOOMOU"],
+                    "es": ["ES.EXPERIENCE.HABER", "ES.OPINION.CREO"],
+                    "en": ["EN.EXPERIENCE.HAVE_BEEN", "EN.OPINION.THINK"]
+                }
             ),
-            # 2. Daily Weather & Conditional Plans (Testing CONDITION & CAUSE)
-            ScenarioDefinition(
-                scenario_id="daily.weather.plan",
-                domain="daily_life",
-                title="Weather & Weekend Plans",
-                description="Discuss conditional plans depending on the weather.",
-                required_skills=["CORE.CONDITION", "CORE.CAUSE", "CORE.NEGATION"],
-                language_skills=["JP.CONDITION.TARA", "JP.CONDITION.NARA", "JP.CAUSE.KARA", "JP.NEGATION.NAI"],
-                vocabulary_domains=["weather", "time", "action"],
-                difficulty=0.45,
-                turns=[
-                    ScenarioTurnTemplate(
-                        turn_id=1,
-                        ai_prompt_text_ja="明日雨が降ったら、どうしますか？",
-                        ai_prompt_text_en="If it rains tomorrow, what will you do?",
-                        target_skills=["JP.CONDITION.TARA", "JP.NEGATION.NAI"],
-                        expected_ir_pattern={"type": "CONDITION", "predicate": "RAIN"},
-                        hints="Express condition and negation (e.g. 雨が降ったら、出かけない / 行かない)",
-                    ),
-                    ScenarioTurnTemplate(
-                        turn_id=2,
-                        ai_prompt_text_ja="日本に住むなら、どこに住みたいですか？",
-                        ai_prompt_text_en="If you were to live in Japan, where would you want to live?",
-                        target_skills=["JP.CONDITION.NARA", "JP.DESIRE.TAI"],
-                        expected_ir_pattern={"predicate": "LIVE", "concept": "TOKYO"},
-                        hints="Express topical condition and desire (e.g. 東京に住みたいです)",
-                    ),
-                ],
-            ),
-            # 3. Travel Hotel Check-in & Inquiries
-            ScenarioDefinition(
-                scenario_id="travel.hotel.checkin",
-                domain="travel",
-                title="Hotel Check-in and Facilities",
-                description="Check into a hotel, ask about amenities and assistance.",
-                required_skills=["CORE.REQUEST", "CORE.ASK", "CORE.CONFIRM"],
-                language_skills=["JP.REQUEST.KUDASAI", "JP.ASK.KA", "JP.INFORM.DESU"],
-                vocabulary_domains=["hotel", "travel"],
-                difficulty=0.30,
-                turns=[
-                    ScenarioTurnTemplate(
-                        turn_id=1,
-                        ai_prompt_text_ja="ご宿泊の予約確認をお願いします。お名前を教えていただけますか？",
-                        ai_prompt_text_en="May I have your name for the reservation confirmation?",
-                        target_skills=["JP.INFORM.DESU"],
-                        expected_ir_pattern={"intent": "INFORM"},
-                        hints="State your name politely (e.g. 田中です)",
-                    ),
-                ],
-            ),
-            # 4. Daily Life & Opinion Sharing
-            ScenarioDefinition(
-                scenario_id="daily.opinion.chat",
-                domain="daily_life",
-                title="Sharing Opinions & Past Experiences",
-                description="Share your impressions about Japanese food and travel experiences.",
-                required_skills=["CORE.OPINION", "CORE.EXPERIENCE", "CORE.POSSIBILITY"],
-                language_skills=["JP.OPINION.TOOMOU", "JP.EXPERIENCE.TAKOTOGAARU", "JP.POSSIBILITY.KAMOSHIRENAI"],
-                vocabulary_domains=["food", "travel", "opinion"],
-                difficulty=0.40,
-                turns=[
-                    ScenarioTurnTemplate(
-                        turn_id=1,
-                        ai_prompt_text_ja="日本に行ったことがありますか？",
-                        ai_prompt_text_en="Have you ever been to Japan?",
-                        target_skills=["JP.EXPERIENCE.TAKOTOGAARU"],
-                        expected_ir_pattern={"type": "EXPERIENCE", "concept": "JAPAN"},
-                        hints="Answer with past experience (e.g. はい、日本に行ったことがあります)",
-                    ),
-                    ScenarioTurnTemplate(
-                        turn_id=2,
-                        ai_prompt_text_ja="日本のラーメンはどう思いますか？",
-                        ai_prompt_text_en="What do you think about Japanese ramen?",
-                        target_skills=["JP.OPINION.TOOMOU"],
-                        expected_ir_pattern={"type": "OPINION"},
-                        hints="Express your opinion (e.g. 美味しいと思います)",
-                    ),
-                ],
-            ),
-            # 5. Travel Directions & Assistance
-            ScenarioDefinition(
-                scenario_id="travel.direction.ask",
-                domain="travel",
-                title="Asking for Directions & Transport",
-                description="Ask pedestrians or station staff for directions to destination.",
-                required_skills=["CORE.LOCATION", "CORE.REQUEST", "CORE.ASK"],
-                language_skills=["JP.REQUEST.KUDASAI", "JP.ASK.KA"],
-                vocabulary_domains=["location", "transportation"],
-                difficulty=0.35,
-                turns=[
-                    ScenarioTurnTemplate(
-                        turn_id=1,
-                        ai_prompt_text_ja="すみません、駅はどこですか？",
-                        ai_prompt_text_en="Excuse me, where is the train station?",
-                        target_skills=["JP.INFORM.DESU", "JP.REQUEST.KUDASAI"],
-                        expected_ir_pattern={"concept": "STATION"},
-                        hints="Ask or respond with directions (e.g. あそこです)",
-                    ),
-                ],
-            ),
-        ]
-        for s in scenarios:
-            self.register(s)
+            expected_ir=CommunicationIR(
+                intent=IntentNode(type=IntentPrimitive.INFORM),
+                content=ContentNode(
+                    type="EVENT",
+                    predicate="GO",
+                    arguments={"destination": {"type": "ENTITY", "concept": "JAPAN"}},
+                    extra={"aspect": "EXPERIENCE"}
+                )
+            )
+        ))
 
 
-global_scenarios = ScenarioRegistry()
+global_scenario_registry = ScenarioRegistry()
