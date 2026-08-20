@@ -6,6 +6,7 @@ import re
 from typing import Any, Dict, List, Optional
 from languages.base import LanguageAdapter, Realization, Evaluation
 from languages.ja.grammar_rules import JAPANESE_VERB_FORMS, JAPANESE_NOUNS
+from languages.ja.syntax_validator import JapaneseSyntaxValidator
 from core.ir_schema import (
     CommunicationIR,
     IntentNode,
@@ -19,7 +20,6 @@ from core.primitives import (
     PolitenessLevel,
     DirectnessLevel,
 )
-from core.validator import IRValidator
 
 
 class JapaneseAdapter(LanguageAdapter):
@@ -115,84 +115,12 @@ class JapaneseAdapter(LanguageAdapter):
         return "はい、そうです。"
 
     def parse(self, text: str, context: Optional[ConversationContext] = None) -> CommunicationIR:
-        clean_text = text.replace(" ", "").replace("、", "").replace("。", "").strip()
-        intent_type = IntentPrimitive.INFORM
-
-        # Detect Condition
-        if "たら" in clean_text or "なら" in clean_text or "ば" in clean_text:
-            return CommunicationIR(
-                intent=IntentNode(type=IntentPrimitive.INFORM),
-                content=ContentNode(
-                    type="CONDITION",
-                    condition={"type": "EVENT", "predicate": "RAIN", "time": {"type": "TIME", "value": "tomorrow"}},
-                    consequence={"type": "NEGATION", "scope": {"type": "EVENT", "predicate": "GO"}}
-                ),
-                pragmatics=Pragmatics(politeness=PolitenessLevel.POLITE if "行きません" in clean_text else PolitenessLevel.CASUAL)
-            )
-
-        # Detect Desire
-        if "たい" in clean_text:
-            return CommunicationIR(
-                intent=IntentNode(type=IntentPrimitive.INFORM),
-                content=ContentNode(
-                    type="ACTION",
-                    predicate="EAT",
-                    arguments={"patient": {"type": "ENTITY", "concept": "RAMEN"}},
-                    extra={"modality": "DESIRE"}
-                ),
-                pragmatics=Pragmatics(politeness=PolitenessLevel.POLITE if "です" in clean_text else PolitenessLevel.CASUAL)
-            )
-
-        # Detect Request
-        if "ください" in clean_text or "お願い" in clean_text:
-            return CommunicationIR(
-                intent=IntentNode(type=IntentPrimitive.REQUEST),
-                content=ContentNode(type="ACTION", predicate="PROVIDE", arguments={"patient": {"type": "ENTITY", "concept": "WATER"}}),
-                pragmatics=Pragmatics(politeness=PolitenessLevel.POLITE)
-            )
-
-        # Default Inform
-        return CommunicationIR(
-            intent=IntentNode(type=intent_type),
-            content=ContentNode(type="EVENT", predicate="INFORM"),
-            pragmatics=Pragmatics(politeness=PolitenessLevel.POLITE if ("です" in clean_text or "ます" in clean_text) else PolitenessLevel.CASUAL)
-        )
+        _, parsed_ir = JapaneseSyntaxValidator.validate_and_evaluate(text)
+        return parsed_ir
 
     def evaluate_naturalness(self, text: str, ir: CommunicationIR, context: Optional[ConversationContext] = None) -> Evaluation:
-        clean_text = text.replace(" ", "").replace("、", "").replace("。", "").strip()
-        feedback = []
-        detected_skills = []
-
-        if not clean_text:
-            return Evaluation(is_valid=False, naturalness_score=0.0, grammar_score=0.0, pragmatic_score=0.0, feedback=["Empty input"])
-
-        # Detect broken connective "と 好きです" (missing second noun/verb)
-        if re.search(r'と(好き|です|ます|だ)', clean_text):
-            feedback.append("助詞『と』後面缺少並列名詞或動作（如『学ぶのが』），不能直接接『好きです』。")
-            return Evaluation(is_valid=False, naturalness_score=0.3, grammar_score=0.3, pragmatic_score=0.4, feedback=feedback)
-
-        if "たら" in clean_text:
-            detected_skills.append("JP.CONDITION.TARA")
-        if "たい" in clean_text:
-            detected_skills.append("JP.DESIRE.TAI")
-        if "ください" in clean_text:
-            detected_skills.append("JP.REQUEST.KUDASAI")
-        if "です" in clean_text or "ます" in clean_text:
-            detected_skills.append("JP.INFORM.DESU")
-
-        has_predicate = any(v in clean_text for v in ["です", "ます", "ません", "たい", "たくない", "ください", "ない", "ある", "いる", "する", "行き", "食べ"])
-        grammar_score = 0.95 if has_predicate else 0.45
-        naturalness_score = 0.92 if has_predicate else 0.40
-        pragmatic_score = 0.90 if ("です" in clean_text or "ます" in clean_text or "ください" in clean_text) else 0.60
-
-        return Evaluation(
-            is_valid=has_predicate,
-            naturalness_score=naturalness_score,
-            grammar_score=grammar_score,
-            pragmatic_score=pragmatic_score,
-            detected_skills=detected_skills,
-            feedback=feedback,
-        )
+        eval_res, _ = JapaneseSyntaxValidator.validate_and_evaluate(text)
+        return eval_res
 
     def get_realizations(self, concept: str, context: Optional[ConversationContext] = None) -> List[Realization]:
         if concept == "CONDITION":
