@@ -2,8 +2,7 @@
 Conversation Generator Interface & Implementation
 
 Section 22:
-- Generates natural scenarios & prompts based on Skill Cluster.
-- Does NOT explicitly tell the learner what grammar rule is being tested.
+- Generates natural scenarios & prompts based on Skill Cluster and Episodes.
 - Naturally triggers target skill across various contextual domains.
 - Avoids repetitive rote memorization by generating varied prompts.
 """
@@ -43,19 +42,19 @@ class ConversationGenerator:
         if not scenario:
             scenario = self.scenario_registry.list_all()[0]
 
-        pdata = scenario.prompt_data
-        prompt_ja = pdata.prompts_target.get("ja", "明日雨が降ったら、どうしますか？")
-        prompt_en = pdata.translations_native.get("en", "If it rains tomorrow, what will you do?")
-        hints = pdata.hints_native.get(profile.native_language, pdata.hints_native.get("zh-TW", ""))
-        skills = pdata.target_skills_by_lang.get(profile.target_language, pdata.target_skills_universal)
+        turn = scenario.turns[(turn_index - 1) % len(scenario.turns)]
+        prompt_ja = turn.prompts_target.get("ja", "明日雨が降ったら、どうしますか？")
+        prompt_en = turn.translations_native.get("en", "If it rains tomorrow, what will you do?")
+        hints = turn.hints_native.get(profile.native_language, turn.hints_native.get("zh-TW", ""))
+        skills = turn.target_skills_by_lang.get(profile.target_language, turn.target_skills_universal)
 
         return GeneratedPrompt(
-            scenario_id=scenario.scenario_id,
+            scenario_id=scenario.episode_id,
             domain=scenario.domain,
             turn_index=turn_index,
             prompt_text_ja=prompt_ja,
             prompt_text_en=prompt_en,
             target_skills=skills,
             hints=hints,
-            expected_ir=scenario.expected_ir.model_dump() if hasattr(scenario.expected_ir, 'model_dump') else {},
+            expected_ir={},
         )

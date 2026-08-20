@@ -1,8 +1,7 @@
 """
 ACAS Web API Application
 
-FastAPI Backend with unified portal auth integration, personal learner persistence,
-vocabulary bank, and sentence review storage.
+FastAPI Backend supporting Multi-Turn Coherent Scenario Episodes (SLA Contextual Continuity).
 """
 
 import os
@@ -59,6 +58,8 @@ def load_user_notebook(learner_id: str) -> Dict[str, Any]:
         "learner_id": learner_id,
         "vocabulary_bank": {},
         "sentence_history": [],
+        "active_episode_id": "restaurant_tapas",
+        "active_turn_index": 0,
         "created_at": time.time(),
         "updated_at": time.time(),
     }
@@ -91,13 +92,16 @@ class NextTurnRequest(BaseModel):
     learner_id: str = "web_user"
     native_language: str = "zh-TW"
     target_language: str = "es"
-    domain: Optional[str] = None
+    episode_id: Optional[str] = None
+    advance_turn: bool = True
 
 
 class SubmitResponseRequest(BaseModel):
     learner_id: str = "web_user"
     native_language: str = "zh-TW"
     target_language: str = "es"
+    episode_id: str
+    turn_index: int
     response_text: str
     latency_ms: float
     prompt_target_lang: Optional[str] = None
@@ -121,21 +125,25 @@ def health_check():
     return {"status": "online", "version": "0.1", "system": "ACAS Universal Communication IR"}
 
 
-@app.get("/api/skills")
-def get_skills():
-    universals = [u.model_dump() for u in global_skill_graph.universal_skills.values()]
-    languages = [l.model_dump() for l in global_skill_graph.language_skills.values()]
-    return {
-        "universal_skills": universals,
-        "language_skills": languages,
-    }
+@app.get("/api/episodes")
+def get_episodes(native_language: str = "zh-TW"):
+    """List all available story episodes."""
+    episodes = []
+    for ep in global_scenario_registry.list_all():
+        episodes.append({
+            "episode_id": ep.episode_id,
+            "icon": ep.icon,
+            "domain": ep.domain,
+            "title": ep.title_native.get(native_language, ep.title_native.get("zh-TW", "")),
+            "description": ep.description_native.get(native_language, ep.description_native.get("zh-TW", "")),
+            "total_turns": len(ep.turns),
+        })
+    return {"episodes": episodes}
 
 
 @app.get("/api/notebook/{learner_id}")
 def get_notebook(learner_id: str):
-    """Retrieve personal vocabulary bank and sentence review history."""
-    data = load_user_notebook(learner_id)
-    return data
+    return load_user_notebook(learner_id)
 
 
 @app.get("/api/progress/{learner_id}")
@@ -143,18 +151,6 @@ def get_progress(learner_id: str, native_language: str = "zh-TW", target_languag
     engine = get_engine(learner_id, native_language=native_language, target_language=target_language)
     prog = engine.compute_progress()
     notebook = load_user_notebook(learner_id)
-    
-    skill_states = {}
-    for sid, st in engine.profile.skills.items():
-        skill_states[sid] = {
-            "mastery": st.mastery.model_dump(),
-            "overall": round(st.mastery.overall_mastery, 2),
-            "median_latency_ms": round(st.median_latency_ms, 0),
-            "stability_days": round(st.memory.stability_days, 2),
-            "retrievability": round(st.memory.retrievability, 2),
-            "statistics": st.statistics.model_dump(),
-            "is_fluent": st.is_fluent(),
-        }
 
     return {
         "goal_id": prog.goal_id,
@@ -164,61 +160,78 @@ def get_progress(learner_id: str, native_language: str = "zh-TW", target_languag
         "consecutive_correct": engine.profile.consecutive_global_correct,
         "overall": prog.overall,
         "dimensions": prog.dimensions.model_dump(),
-        "mastered_skills_count": prog.mastered_skills_count,
-        "total_skills_count": prog.total_skills_count,
         "vocabulary_count": len(notebook.get("vocabulary_bank", {})),
         "sentences_practiced_count": len(notebook.get("sentence_history", [])),
-        "skill_states": skill_states,
-        "total_events": len(engine.event_store.get_all_events()),
     }
 
 
 @app.post("/api/session/next-turn")
 def next_turn(req: NextTurnRequest):
     engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
-    
-    all_scenarios = global_scenario_registry.list_all()
-    scenario = all_scenarios[(engine.session_turn_count) % len(all_scenarios)]
-    engine.session_turn_count += 1
-    engine.current_prompt = scenario.expected_ir
+    notebook = load_user_notebook(req.learner_id)
 
-    pdata = scenario.prompt_data
-    prompt_target = pdata.prompts_target.get(req.target_language, pdata.prompts_target.get("es", ""))
-    trans_native = pdata.translations_native.get(req.native_language, pdata.translations_native.get("zh-TW", ""))
-    hints_native = pdata.hints_native.get(req.native_language, pdata.hints_native.get("zh-TW", ""))
+    # Determine episode
+    chosen_ep_id = req.episode_id or notebook.get("active_episode_id", "restaurant_tapas")
+    episode = global_scenario_registry.get(chosen_ep_id) or global_scenario_registry.list_all()[0]
+
+    # Determine turn inside episode
+    current_turn_idx = notebook.get("active_turn_index", 0)
+    if req.advance_turn:
+        current_turn_idx = (current_turn_idx) % len(episode.turns)
+
+    turn = episode.turns[current_turn_idx]
+    engine.session_turn_count += 1
+
+    prompt_target = turn.prompts_target.get(req.target_language, turn.prompts_target.get("es", ""))
+    trans_native = turn.translations_native.get(req.native_language, turn.translations_native.get("zh-TW", ""))
+    hints_native = turn.hints_native.get(req.native_language, turn.hints_native.get("zh-TW", ""))
+    step_title = turn.step_title.get(req.native_language, turn.step_title.get("zh-TW", f"第 {current_turn_idx+1} 幕"))
     
-    target_skills = pdata.target_skills_by_lang.get(req.target_language, pdata.target_skills_universal)
+    target_skills = turn.target_skills_by_lang.get(req.target_language, turn.target_skills_universal)
+    formula = turn.formula.get(req.target_language, turn.formula.get("es", ""))
+    choices = turn.choices_by_lang.get(req.target_language, turn.choices_by_lang.get("es", []))
+    words = turn.words_by_lang.get(req.target_language, turn.words_by_lang.get("es", []))
 
     return {
-        "turn_count": engine.session_turn_count,
-        "scenario_id": scenario.scenario_id,
-        "domain": scenario.domain,
+        "episode_id": episode.episode_id,
+        "episode_title": episode.title_native.get(req.native_language, episode.title_native.get("zh-TW", "")),
+        "episode_icon": episode.icon,
+        "turn_index": current_turn_idx,
+        "total_turns": len(episode.turns),
+        "step_title": step_title,
         "native_language": req.native_language,
         "target_language": req.target_language,
         "difficulty_level": engine.profile.current_difficulty_level,
         "prompt_target_lang": prompt_target,
         "prompt_native_translation": trans_native,
         "hints_native": hints_native,
+        "formula": formula,
         "target_skills": target_skills,
-        "target_skills_universal": pdata.target_skills_universal,
+        "choices": choices,
+        "words": words,
     }
 
 
 @app.post("/api/session/submit")
 def submit_response(req: SubmitResponseRequest):
     engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
-    
     analysis = engine.process_response(req.response_text, req.latency_ms)
     
-    is_success = (analysis.grammar_accuracy >= 0.7 and analysis.semantic_correctness >= 0.7)
+    is_success = (analysis.grammar_accuracy >= 0.65)
     engine.profile.update_adaptive_difficulty(is_success)
-    
-    # Save to personal user notebook
+
     notebook = load_user_notebook(req.learner_id)
+    episode = global_scenario_registry.get(req.episode_id) or global_scenario_registry.list_all()[0]
+
+    # Advance to next turn in story on success
+    if is_success:
+        notebook["active_turn_index"] = (req.turn_index + 1) % len(episode.turns)
+        notebook["active_episode_id"] = req.episode_id
     
-    # Record sentence history
+    # Record history
     sentence_entry = {
         "timestamp": time.time(),
+        "episode_id": req.episode_id,
         "target_language": req.target_language,
         "prompt_target": req.prompt_target_lang or "",
         "prompt_native": req.prompt_native_translation or "",
@@ -234,9 +247,9 @@ def submit_response(req: SubmitResponseRequest):
     if len(notebook["sentence_history"]) > 100:
         notebook["sentence_history"].pop()
 
-    # Extract & record vocabulary tokens into user's vocabulary bank
-    words = req.response_text.replace("、", " ").replace("。", " ").replace(",", " ").replace(".", " ").replace("¿", " ").replace("?", " ").replace("¡", " ").replace("!", " ").split()
-    for w in words:
+    # Extract words
+    tokens = req.response_text.replace("、", " ").replace("。", " ").replace(",", " ").replace(".", " ").replace("¿", " ").replace("?", " ").replace("¡", " ").replace("!", " ").split()
+    for w in tokens:
         clean_w = w.strip()
         if len(clean_w) > 1:
             if clean_w not in notebook["vocabulary_bank"]:
@@ -255,6 +268,8 @@ def submit_response(req: SubmitResponseRequest):
     save_user_notebook(req.learner_id, notebook)
     progress = engine.compute_progress()
 
+    is_episode_completed = (is_success and req.turn_index == len(episode.turns) - 1)
+
     return {
         "analysis": {
             "semantic_correctness": round(analysis.semantic_correctness, 2),
@@ -265,9 +280,11 @@ def submit_response(req: SubmitResponseRequest):
             "parsed_ir": analysis.parsed_ir,
             "latency_ms": req.latency_ms,
         },
+        "is_success": is_success,
+        "is_episode_completed": is_episode_completed,
+        "next_turn_index": notebook["active_turn_index"],
         "difficulty_level": engine.profile.current_difficulty_level,
         "consecutive_correct": engine.profile.consecutive_global_correct,
-        "difficulty_changed": is_success,
         "progress": progress.model_dump(),
     }
 
@@ -308,40 +325,32 @@ def transform_ir(req: IRTransformRequest):
 def run_simulation(req: SimulationRequest):
     engine = get_engine(req.learner_id, target_language=req.target_language)
     
-    if req.target_language == "es":
-        simulated_responses = [
-            ("Si llueve mañana, no saldré.", 1300.0),
-            ("Quiero comer ramen.", 1000.0),
-            ("Un vaso de agua, por favor.", 750.0),
-            ("He estado en Japón.", 1450.0),
-            ("Creo que es muy delicioso.", 1100.0),
-        ]
-    else:
-        simulated_responses = [
-            ("明日雨が降ったら、行きません。", 1350.0),
-            ("ラーメンを食べたいです。", 1050.0),
-            ("お水をください。", 800.0),
-            ("日本に行ったことがあります。", 1500.0),
-            ("美味しいと思います。", 1150.0),
-        ]
+    simulated_responses = [
+        ("Sí, tengo una reserva.", 1100.0),
+        ("Quiero comer paella.", 1000.0),
+        ("Un vaso de agua, por favor.", 750.0),
+        ("Creo que es muy deliciosa.", 1200.0),
+    ] if req.target_language == "es" else [
+        ("はい、予約しています。", 1200.0),
+        ("ラーメンを食べたいです。", 1050.0),
+        ("お水をください。", 800.0),
+        ("とても美味しいと思います。", 1150.0),
+    ]
 
     history = []
     for i in range(req.turns):
         resp, lat = simulated_responses[i % len(simulated_responses)]
         prompt = engine.start_next_turn()
         analysis = engine.process_response(resp, lat)
-        is_success = (analysis.grammar_accuracy >= 0.7)
+        is_success = (analysis.grammar_accuracy >= 0.65)
         engine.profile.update_adaptive_difficulty(is_success)
         prog = engine.compute_progress()
         history.append({
             "turn": engine.session_turn_count,
             "target_language": req.target_language,
-            "difficulty_level": engine.profile.current_difficulty_level,
             "response": resp,
             "latency_ms": lat,
             "overall_mastery": prog.overall,
-            "production": prog.dimensions.production,
-            "retention": prog.dimensions.retention,
         })
 
     return {

@@ -1,4 +1,4 @@
-// ACAS Modern Client Logic
+// ACAS Modern Client Logic - Multi-Turn Coherent Episodes
 let turnStartTime = Date.now();
 let currentLearnerId = "guest_user";
 let currentUsername = "Guest";
@@ -6,8 +6,9 @@ let currentProvider = "local";
 
 let targetLanguage = "es";
 let nativeLanguage = "zh-TW";
+let currentEpisodeId = "restaurant_tapas";
+let currentTurnIndex = 0;
 let currentDifficultyLevel = 1;
-let consecutiveCorrect = 0;
 let currentPromptData = null;
 
 let assembledWords = [];
@@ -19,7 +20,6 @@ function apiUrl(path) {
   return API_BASE + cleanPath;
 }
 
-// 1. Navigation View Switcher
 function switchView(viewId) {
   document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-tab-btn').forEach(el => el.classList.remove('active'));
@@ -34,7 +34,6 @@ function switchView(viewId) {
   }
 }
 
-// 2. Auth Session Check
 async function checkAuthSession() {
   try {
     const res = await fetch('/dashboard/api/auth/session');
@@ -55,14 +54,20 @@ async function checkAuthSession() {
   }
 }
 
+function changeEpisode(epId) {
+  currentEpisodeId = epId;
+  currentTurnIndex = 0;
+  loadNextTurn(false);
+}
+
 function changeNativeLanguage(lang) {
   nativeLanguage = lang;
-  loadNextTurn();
+  loadNextTurn(false);
 }
 
 function changeTargetLanguage(lang) {
   targetLanguage = lang;
-  loadNextTurn();
+  loadNextTurn(false);
 }
 
 function speakText(text, lang) {
@@ -81,158 +86,7 @@ function playCurrentPrompt() {
   }
 }
 
-// 3. Scenario & Assembly Data
-const SCENARIO_THEMES = {
-  "daily.weather.plan": { icon: "🌦️", title: "天氣計劃與出行", domain: "日常生活" },
-  "travel.restaurant.order": { icon: "🍽️", title: "餐廳點餐與需求", domain: "旅遊餐飲" },
-  "daily.opinion.chat": { icon: "💬", title: "旅遊經驗與心得", domain: "日常社交" }
-};
-
-const PRACTICE_DB = {
-  "daily.weather.plan": {
-    formula: "[Si 如果] + [llueve 下雨], [no saldré / no voy 我不出門]",
-    es: {
-      choices: [
-        "Si llueve mañana, no saldré.",
-        "Si llueve, me quedo en casa.",
-        "No voy si llueve mañana."
-      ],
-      words: [
-        { w: "Si", m: "如果" }, { w: "llueve", m: "下雨" }, { w: "mañana,", m: "明天" },
-        { w: "no", m: "不" }, { w: "saldré", m: "出門" }, { w: "voy", m: "去" },
-        { w: "me quedo", m: "待在" }, { w: "en casa", m: "家裡" }
-      ]
-    },
-    ja: {
-      choices: [
-        "明日雨が降ったら、行きません。",
-        "明日雨が降ったら、家で休みます。",
-        "雨だったら、出かけない。"
-      ],
-      words: [
-        { w: "明日", m: "明天" }, { w: "雨が降ったら", m: "如果下雨" },
-        { w: "行きません", m: "不去" }, { w: "出かけない", m: "不出門" },
-        { w: "家で", m: "在家" }, { w: "休みます", m: "休息" }
-      ]
-    },
-    en: {
-      choices: [
-        "If it rains tomorrow, I will not go out.",
-        "If it rains, I will stay at home."
-      ],
-      words: [
-        { w: "If", m: "如果" }, { w: "it rains", m: "下雨" }, { w: "tomorrow,", m: "明天" },
-        { w: "I will not", m: "我將不" }, { w: "go out", m: "出門" }
-      ]
-    }
-  },
-  "travel.restaurant.order": {
-    formula: "[Quiero 想吃] + [ramen 拉麵] / [Un vaso de agua 一杯水], [por favor 請]",
-    es: {
-      choices: [
-        "Quiero comer ramen.",
-        "Un vaso de agua, por favor.",
-        "El menú, por favor."
-      ],
-      words: [
-        { w: "Quiero", m: "我想要" }, { w: "comer", m: "吃" }, { w: "ramen", m: "拉麵" },
-        { w: "Un vaso de agua,", m: "一杯水" }, { w: "El menú,", m: "菜單" }, { w: "por favor", m: "請" }
-      ]
-    },
-    ja: {
-      choices: [
-        "ラーメンをください。",
-        "ラーメンが食べたいです。",
-        "お水をください。"
-      ],
-      words: [
-        { w: "ラーメンを", m: "拉麵" }, { w: "お水を", m: "水" }, { w: "メニューを", m: "菜單" },
-        { w: "ください", m: "請給我" }, { w: "食べたいです", m: "想吃" }
-      ]
-    },
-    en: {
-      choices: [
-        "I want to eat ramen.",
-        "A glass of water, please."
-      ],
-      words: [
-        { w: "I want", m: "我想要" }, { w: "to eat", m: "吃" }, { w: "ramen", m: "拉麵" },
-        { w: "water,", m: "水" }, { w: "please", m: "請" }
-      ]
-    }
-  },
-  "daily.opinion.chat": {
-    formula: "[Creo que 我覺得] + [es muy delicioso 非常美味]",
-    es: {
-      choices: [
-        "Sí, he estado en Japón.",
-        "Creo que es muy delicioso."
-      ],
-      words: [
-        { w: "Sí,", m: "有/是的" }, { w: "he estado", m: "我曾去過" }, { w: "en Japón", m: "在日本" },
-        { w: "Creo que", m: "我覺得" }, { w: "es muy delicioso", m: "非常美味" }
-      ]
-    },
-    ja: {
-      choices: [
-        "はい、日本に行ったことがあります。",
-        "とても美味しいと思います。"
-      ],
-      words: [
-        { w: "はい、", m: "是的" }, { w: "日本に", m: "去日本" }, { w: "行ったことがあります", m: "曾經去過" },
-        { w: "とても美味しいと", m: "非常美味" }, { w: "思います", m: "我覺得" }
-      ]
-    },
-    en: {
-      choices: [
-        "Yes, I have been to Japan.",
-        "I think it is very delicious."
-      ],
-      words: [
-        { w: "Yes,", m: "是的" }, { w: "I have been", m: "我曾去過" }, { w: "to Japan", m: "去日本" },
-        { w: "I think", m: "我覺得" }, { w: "delicious", m: "美味" }
-      ]
-    }
-  }
-};
-
-// 4. Interactive Word Assembly Engine
-function renderAssemblyArea(scenarioId) {
-  const pData = PRACTICE_DB[scenarioId] || PRACTICE_DB["daily.weather.plan"];
-  const langData = pData[targetLanguage] || pData["es"];
-
-  document.getElementById('formula-hint').innerText = pData.formula;
-
-  // Render Word Pool
-  const poolContainer = document.getElementById('word-pool');
-  poolContainer.innerHTML = '';
-  langData.words.forEach((item, index) => {
-    const btn = document.createElement('button');
-    btn.className = 'chip-block';
-    btn.id = `chip-item-${index}`;
-    btn.innerHTML = `<span>${item.w}</span><span class="chip-sub">(${item.m})</span>`;
-    btn.onclick = () => addWordToSlot(item.w, index);
-    poolContainer.appendChild(btn);
-  });
-
-  // Render Quick Choices
-  const choiceContainer = document.getElementById('quick-choices');
-  choiceContainer.innerHTML = '';
-  langData.choices.forEach(ch => {
-    const chip = document.createElement('button');
-    chip.className = 'choice-chip';
-    chip.innerText = `💬 ${ch}`;
-    chip.onclick = () => {
-      clearAssembledWords();
-      document.getElementById('input-fallback').value = ch;
-      document.getElementById('construction-slots').classList.add('has-items');
-    };
-    choiceContainer.appendChild(chip);
-  });
-
-  clearAssembledWords();
-}
-
+// Word assembly handlers
 function addWordToSlot(word, poolIndex) {
   assembledWords.push({ word, poolIndex });
   renderAssembledSlots();
@@ -291,36 +145,68 @@ function handleKeyPress(event) {
   if (event.key === 'Enter') submitResponse();
 }
 
-// 5. Turn Loader & Submission
-async function loadNextTurn() {
+// Load Next Turn within the Coherent Story Episode
+async function loadNextTurn(advance = true) {
   turnStartTime = Date.now();
   document.getElementById('feedback-banner').style.display = 'none';
 
   const res = await fetch(apiUrl('api/session/next-turn'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ learner_id: currentLearnerId, native_language: nativeLanguage, target_language: targetLanguage })
+    body: JSON.stringify({
+      learner_id: currentLearnerId,
+      native_language: nativeLanguage,
+      target_language: targetLanguage,
+      episode_id: currentEpisodeId,
+      advance_turn: advance
+    })
   });
   const data = await res.json();
   currentPromptData = data;
+  currentEpisodeId = data.episode_id;
+  currentTurnIndex = data.turn_index;
   currentDifficultyLevel = data.difficulty_level || 1;
 
-  // Theme info
-  const theme = SCENARIO_THEMES[data.scenario_id] || { icon: "💬", title: "對話練習", domain: "日常" };
-  document.getElementById('scenario-icon').innerText = theme.icon;
-  document.getElementById('scenario-title').innerText = `情境：${theme.title}`;
-  document.getElementById('scenario-domain').innerText = theme.domain;
+  // Update Episode & Scene Info
+  document.getElementById('episode-select').value = data.episode_id;
+  document.getElementById('scenario-icon').innerText = data.episode_icon;
+  document.getElementById('scenario-title').innerText = data.episode_title;
+  document.getElementById('scenario-domain').innerText = `第 ${data.turn_index + 1}/${data.total_turns} 幕`;
+  document.getElementById('episode-step-badge').innerText = data.step_title;
 
-  // Prompt bubbles
+  // Prompts
   document.getElementById('prompt-target-text').innerText = data.prompt_target_lang;
   document.getElementById('prompt-native-text').innerText = data.prompt_native_translation;
+  document.getElementById('formula-hint').innerText = data.formula;
 
-  // Difficulty badge
-  const diffLabels = { 1: "⭐ Level 1: 入門引導", 2: "⭐⭐ Level 2: 積木挑戰", 3: "⭐⭐⭐ Level 3: 直覺盲測" };
-  document.getElementById('difficulty-badge').innerText = diffLabels[currentDifficultyLevel] || "⭐ Level 1";
+  // Render Word Bank
+  const poolContainer = document.getElementById('word-pool');
+  poolContainer.innerHTML = '';
+  (data.words || []).forEach((item, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'chip-block';
+    btn.id = `chip-item-${index}`;
+    btn.innerHTML = `<span>${item.w}</span><span class="chip-sub">(${item.m})</span>`;
+    btn.onclick = () => addWordToSlot(item.w, index);
+    poolContainer.appendChild(btn);
+  });
 
-  // Render Assembly zone
-  renderAssemblyArea(data.scenario_id);
+  // Render Quick Choices
+  const choiceContainer = document.getElementById('quick-choices');
+  choiceContainer.innerHTML = '';
+  (data.choices || []).forEach(ch => {
+    const chip = document.createElement('button');
+    chip.className = 'choice-chip';
+    chip.innerText = `💬 ${ch}`;
+    chip.onclick = () => {
+      clearAssembledWords();
+      document.getElementById('input-fallback').value = ch;
+      document.getElementById('construction-slots').classList.add('has-items');
+    };
+    choiceContainer.appendChild(chip);
+  });
+
+  clearAssembledWords();
 }
 
 async function submitResponse() {
@@ -332,20 +218,6 @@ async function submitResponse() {
   }
   if (!text) return;
 
-  // Chinese intent bridge
-  const isChinese = /[\u4e00-\u9fa5]/.test(text) && !/[\u3040-\u309f\u30a0-\u30ff]/.test(text);
-  if (isChinese) {
-    if (targetLanguage === 'es') {
-      if (text.includes("不去") || text.includes("不出門")) text = "Si llueve mañana, no saldré.";
-      else if (text.includes("吃") || text.includes("拉麵")) text = "Quiero comer ramen.";
-      else text = "Sí, por favor.";
-    } else {
-      if (text.includes("不去") || text.includes("不出門")) text = "明日雨が降ったら、行きません。";
-      else if (text.includes("吃") || text.includes("拉麵")) text = "ラーメンを食べたいです。";
-      else text = "はい、そうです。";
-    }
-  }
-
   const latency = Date.now() - turnStartTime;
 
   const res = await fetch(apiUrl('api/session/submit'), {
@@ -355,6 +227,8 @@ async function submitResponse() {
       learner_id: currentLearnerId,
       native_language: nativeLanguage,
       target_language: targetLanguage,
+      episode_id: currentEpisodeId,
+      turn_index: currentTurnIndex,
       response_text: text,
       latency_ms: latency,
       prompt_target_lang: currentPromptData ? currentPromptData.prompt_target_lang : '',
@@ -363,21 +237,26 @@ async function submitResponse() {
   });
   const data = await res.json();
 
-  // Show Feedback Drawer
   const banner = document.getElementById('feedback-banner');
-  const isSuccess = (data.analysis.grammar_accuracy >= 0.7);
+  const isSuccess = data.is_success;
 
   banner.className = `feedback-banner ${isSuccess ? 'success' : 'error'}`;
-  document.getElementById('feedback-icon').innerText = isSuccess ? '🎉' : '💡';
-  document.getElementById('feedback-title').innerText = isSuccess ? '作答正確！' : '請再試一次！';
-  document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法吻合: ${Math.round(data.analysis.grammar_accuracy * 100)}% · 意圖: ${data.analysis.parsed_ir.intent?.type || 'INFORM'}`;
+  
+  if (data.is_episode_completed) {
+    document.getElementById('feedback-icon').innerText = '🏆';
+    document.getElementById('feedback-title').innerText = '恭喜通關整集情境故事！';
+    document.getElementById('feedback-detail').innerText = `已完成全劇本對話！獲得整體熟練度提升，單字庫已同步更新。`;
+  } else {
+    document.getElementById('feedback-icon').innerText = isSuccess ? '🎉' : '💡';
+    document.getElementById('feedback-title').innerText = isSuccess ? '回答精準！' : '可以嘗試調整用詞：';
+    document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法準確: ${Math.round(data.analysis.grammar_accuracy * 100)}%`;
+  }
+  
   banner.style.display = 'block';
-
-  // Speak user response
   speakText(text);
 }
 
-// 6. Notebook Loader
+// Notebook Loader
 async function loadNotebook() {
   try {
     const res = await fetch(apiUrl(`api/notebook/${currentLearnerId}`));
@@ -439,7 +318,7 @@ async function loadNotebook() {
   }
 }
 
-// 7. Engine Sandbox & Progress
+// Engine Sandbox & Progress
 async function testIRTransform() {
   const text = document.getElementById('sandbox-input').value;
   let srcLang = 'en';
@@ -483,5 +362,5 @@ async function runSim(turns) {
 
 window.addEventListener('DOMContentLoaded', async () => {
   await checkAuthSession();
-  loadNextTurn();
+  loadNextTurn(false);
 });

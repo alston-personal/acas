@@ -83,6 +83,21 @@
     
     <!-- 1. FOCUSED PRACTICE VIEW (Duolingo/Speak Style Clean Interaction) -->
     <section id="practice-view" class="view-pane active">
+
+      <!-- Episode Story Selector Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; background:rgba(18,25,41,0.6); border:1px solid var(--border-subtle); padding:0.6rem 1rem; border-radius:var(--radius-md);">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-size:0.85rem; font-weight:700; color:#fff;">📚 選擇練習故事章節：</span>
+          <select id="episode-select" onchange="changeEpisode(this.value)" style="background:#111827; border:1px solid var(--border-active); color:#fff; font-weight:600; font-size:0.85rem; padding:0.35rem 0.75rem; border-radius:var(--radius-sm); outline:none; cursor:pointer;">
+            <option value="restaurant_tapas">🍽️ 西班牙小吃店點餐記 (4 幕連貫故事)</option>
+            <option value="weekend_trip">🌦️ 週末出遊與天氣應變 (3 幕連貫故事)</option>
+          </select>
+        </div>
+        <div id="episode-step-badge" style="font-size:0.8rem; font-weight:700; color:var(--accent-cyan); background:rgba(0,242,254,0.12); padding:0.25rem 0.65rem; border-radius:var(--radius-full);">
+          第 1/4 幕：入座與確認預約
+        </div>
+      </div>
+
       
       <div class="practice-card">
         
