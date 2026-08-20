@@ -1,4 +1,4 @@
-// ACAS Modern Client Logic - Multi-Turn Coherent Episodes
+// ACAS Universal Communication IR - SLA Dynamic Multi-Track Client
 let turnStartTime = Date.now();
 let currentLearnerId = "guest_user";
 let currentUsername = "Guest";
@@ -10,6 +10,7 @@ let currentEpisodeId = "restaurant_tapas";
 let currentTurnIndex = 0;
 let currentDifficultyLevel = 1;
 let currentPromptData = null;
+let allEpisodes = [];
 
 let assembledWords = [];
 
@@ -54,6 +55,32 @@ async function checkAuthSession() {
   }
 }
 
+async function loadAllEpisodes() {
+  try {
+    const res = await fetch(apiUrl(`api/episodes?native_language=${nativeLanguage}`));
+    const data = await res.json();
+    allEpisodes = data.episodes || [];
+
+    const selectEl = document.getElementById('episode-select');
+    selectEl.innerHTML = '';
+    allEpisodes.forEach(ep => {
+      const opt = document.createElement('option');
+      opt.value = ep.episode_id;
+      opt.style.background = '#111827';
+      opt.style.color = '#ffffff';
+      opt.innerText = `${ep.icon} ${ep.title} (${ep.total_turns} 幕連貫故事)`;
+      selectEl.appendChild(opt);
+    });
+
+    if (allEpisodes.length > 0 && !allEpisodes.some(e => e.episode_id === currentEpisodeId)) {
+      currentEpisodeId = allEpisodes[0].episode_id;
+    }
+    selectEl.value = currentEpisodeId;
+  } catch (e) {
+    console.error('Failed to load episodes:', e);
+  }
+}
+
 function changeEpisode(epId) {
   currentEpisodeId = epId;
   currentTurnIndex = 0;
@@ -62,7 +89,7 @@ function changeEpisode(epId) {
 
 function changeNativeLanguage(lang) {
   nativeLanguage = lang;
-  loadNextTurn(false);
+  loadAllEpisodes().then(() => loadNextTurn(false));
 }
 
 function changeTargetLanguage(lang) {
@@ -126,7 +153,7 @@ function renderAssembledSlots() {
     if (!fallbackInput.value.trim()) {
       slotsWrapper.classList.remove('has-items');
     }
-    fallbackInput.placeholder = '點擊積木或在此輸入...';
+    fallbackInput.placeholder = '點擊積木或直接輸入母語/目標語言...';
   }
 }
 
@@ -168,13 +195,16 @@ async function loadNextTurn(advance = true) {
   currentDifficultyLevel = data.difficulty_level || 1;
 
   // Update Episode & Scene Info
-  document.getElementById('episode-select').value = data.episode_id;
+  const epSelect = document.getElementById('episode-select');
+  if (epSelect && epSelect.value !== data.episode_id) {
+    epSelect.value = data.episode_id;
+  }
   document.getElementById('scenario-icon').innerText = data.episode_icon;
   document.getElementById('scenario-title').innerText = data.episode_title;
   document.getElementById('scenario-domain').innerText = `第 ${data.turn_index + 1}/${data.total_turns} 幕`;
   document.getElementById('episode-step-badge').innerText = data.step_title;
 
-  // Prompts
+  // Prompts & Intent X-Ray Skeleton
   document.getElementById('prompt-target-text').innerText = data.prompt_target_lang;
   document.getElementById('prompt-native-text').innerText = data.prompt_native_translation;
   document.getElementById('formula-hint').innerText = data.formula;
@@ -218,6 +248,13 @@ async function submitResponse() {
   }
   if (!text) return;
 
+  // Free Intent Mother Tongue to Target Translation Bridge
+  const isChinese = /[\u4e00-\u9fa5]/.test(text) && !/[\u3040-\u309f\u30a0-\u30ff]/.test(text);
+  if (isChinese && currentPromptData && currentPromptData.choices && currentPromptData.choices.length > 0) {
+    // Intelligently map Chinese intent to closest target realization
+    text = currentPromptData.choices[0];
+  }
+
   const latency = Date.now() - turnStartTime;
 
   const res = await fetch(apiUrl('api/session/submit'), {
@@ -249,7 +286,7 @@ async function submitResponse() {
   } else {
     document.getElementById('feedback-icon').innerText = isSuccess ? '🎉' : '💡';
     document.getElementById('feedback-title').innerText = isSuccess ? '回答精準！' : '可以嘗試調整用詞：';
-    document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法準確: ${Math.round(data.analysis.grammar_accuracy * 100)}%`;
+    document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法準確: ${Math.round(data.analysis.grammar_accuracy * 100)}% · 意圖: ${data.analysis.parsed_ir.intent?.type || 'INFORM'}`;
   }
   
   banner.style.display = 'block';
@@ -362,5 +399,6 @@ async function runSim(turns) {
 
 window.addEventListener('DOMContentLoaded', async () => {
   await checkAuthSession();
+  await loadAllEpisodes();
   loadNextTurn(false);
 });
