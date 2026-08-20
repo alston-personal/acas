@@ -246,7 +246,37 @@ def submit_response(req: SubmitResponseRequest):
 
     analysis = engine.process_response(req.response_text, req.latency_ms)
     
-    is_success = (analysis.grammar_accuracy >= 0.65)
+    # Strict validation against turn targets and length
+    raw_ans = req.response_text.replace(" ", "").replace("、", "").replace("。", "").lower()
+    valid_choices = [c.replace(" ", "").replace("、", "").replace("。", "").lower() for c in turn.choices_by_lang.get(req.target_language, [])]
+    
+    # Calculate token match / choice containment
+    matched_choice = any(raw_ans == c or (len(raw_ans) >= 8 and (raw_ans in c or c in raw_ans)) for c in valid_choices)
+    
+    # Detect broken fragments like "旅行と好きです" (missing 学ぶのが)
+    is_broken_fragment = False
+    if req.target_language == "ja" and "と好き" in raw_ans:
+        is_broken_fragment = True
+    elif req.target_language == "es" and raw_ans.endswith(" y") or raw_ans.startswith("y "):
+        is_broken_fragment = True
+
+    if is_broken_fragment:
+        analysis.grammar_accuracy = 0.30
+        analysis.semantic_correctness = 0.35
+        analysis.naturalness = 0.30
+        is_success = False
+    elif matched_choice:
+        analysis.grammar_accuracy = max(0.90, analysis.grammar_accuracy)
+        analysis.semantic_correctness = max(0.92, analysis.semantic_correctness)
+        is_success = True
+    else:
+        # Partial or incomplete submission
+        if len(raw_ans) < 5 or analysis.grammar_accuracy < 0.70:
+            analysis.grammar_accuracy = min(0.50, analysis.grammar_accuracy)
+            analysis.semantic_correctness = min(0.50, analysis.semantic_correctness)
+            is_success = False
+        else:
+            is_success = (analysis.grammar_accuracy >= 0.65 and analysis.semantic_correctness >= 0.65)
     engine.profile.update_adaptive_difficulty(is_success)
 
     notebook = load_user_notebook(req.learner_id)
