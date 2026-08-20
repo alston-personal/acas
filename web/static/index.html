@@ -24,29 +24,65 @@
     <div class="lang-controls">
       <!-- 1. Native Language Selector -->
       <div class="selector-pill">
-        <span style="font-size: 0.75rem; color: var(--accent-amber); font-weight: 600;">🗣️ 我的母語 (Native):</span>
+        <span style="font-size: 0.75rem; color: var(--accent-amber); font-weight: 600;">🗣️ 母語:</span>
         <select id="native-language-select" onchange="changeNativeLanguage(this.value)">
-          <option value="zh-TW">🇹🇼 繁體中文 (Traditional Chinese)</option>
-          <option value="zh-CN">🇨🇳 简体中文 (Simplified Chinese)</option>
+          <option value="zh-TW">🇹🇼 繁體中文</option>
+          <option value="zh-CN">🇨🇳 简体中文</option>
           <option value="en">🇬🇧 English</option>
         </select>
       </div>
 
       <!-- 2. Target Learning Language Selector -->
       <div class="selector-pill">
-        <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">🎯 學習目標語言 (Target):</span>
+        <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">🎯 目標:</span>
         <select id="target-language-select" onchange="changeTargetLanguage(this.value)">
-          <option value="es">🇪🇸 西班牙語 (Spanish - 推薦零基礎)</option>
+          <option value="es">🇪🇸 西班牙語 (Spanish)</option>
           <option value="ja">🇯🇵 日語 (Japanese)</option>
           <option value="en">🇬🇧 英語 (English)</option>
         </select>
       </div>
 
-      <button class="btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" onclick="openTutorialModal()">❓ 新手引導</button>
+      <!-- 3. Unified Portal Auth Widget -->
+      <div id="auth-container" class="auth-box">
+        <!-- Logged Out View -->
+        <div id="auth-logged-out" style="display: flex; gap: 0.35rem; align-items: center;">
+          <div class="auth-dropdown">
+            <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
+              🔑 登入官網帳號 ▾
+            </button>
+            <div class="auth-dropdown-menu">
+              <a href="/dashboard/api/auth/signin/line?returnTo=/acas/" class="auth-item line-item">
+                <span>💬 LINE 快速登入</span>
+              </a>
+              <a href="/dashboard/api/auth/signin/google?returnTo=/acas/" class="auth-item google-item">
+                <span>🔴 Google 帳號登入</span>
+              </a>
+              <a href="/dashboard/api/auth/signin/github?returnTo=/acas/" class="auth-item github-item">
+                <span>🐱 GitHub 帳號登入</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logged In View -->
+        <div id="auth-logged-in" style="display: none; align-items: center; gap: 0.5rem;">
+          <div style="font-size: 0.78rem; color: #fff; background: rgba(0,242,254,0.15); border: 1px solid var(--accent-cyan); padding: 0.25rem 0.6rem; border-radius: var(--radius-full); display: flex; align-items: center; gap: 0.3rem;">
+            <span id="user-avatar-icon">👤</span>
+            <span id="user-display-name" style="font-weight: 700;">Learner</span>
+            <span id="user-provider-tag" style="font-size:0.65rem; color:var(--accent-cyan); text-transform:uppercase;">(PORTAL)</span>
+          </div>
+          <a href="/dashboard/api/auth/logout?returnTo=/acas/" class="btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.72rem; text-decoration: none;">
+            登出
+          </a>
+        </div>
+      </div>
+
+      <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" onclick="openTutorialModal()">❓ 新手引導</button>
     </div>
 
     <nav>
       <button class="nav-btn active" onclick="switchTab('session-tab')">💬 Live Session</button>
+      <button class="nav-btn" onclick="switchTab('notebook-tab')">📖 個人紀錄與單字庫</button>
       <button class="nav-btn" onclick="switchTab('ir-sandbox-tab')">⚡ IR Sandbox</button>
       <button class="nav-btn" onclick="switchTab('skills-tab')">🧬 Skill Graph</button>
       <button class="nav-btn" onclick="switchTab('analytics-tab')">📊 Mastery & Retention</button>
@@ -65,7 +101,6 @@
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div class="mission-tag">🚩 當前學習任務 (CURRENT MISSION)</div>
           
-          <!-- Dynamic Adaptive Difficulty Ladder Badge -->
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <div id="difficulty-badge" style="background: rgba(255, 184, 0, 0.2); border: 1px solid var(--accent-amber); color: #fbbf24; padding: 0.2rem 0.6rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 700;">
               ⭐ Level 1: 入門全引導 (Novice)
@@ -98,10 +133,9 @@
           
           <div id="chat-messages" class="chat-messages"></div>
 
-          <!-- Beginner Interactive Scaffolding Panel (Adapts dynamically by Difficulty Level) -->
+          <!-- Beginner Interactive Scaffolding Panel -->
           <div id="scaffolding-panel" class="scaffolding-box">
             
-            <!-- Quick Options: Hidden on Level 2 & Level 3 -->
             <div id="quick-options-wrapper">
               <div class="scaffolding-title">
                 <span>🧩 零基礎一鍵選句 (點擊直接填入)：</span>
@@ -109,7 +143,6 @@
               <div id="quick-options-container" class="chips-container"></div>
             </div>
             
-            <!-- Word Builder: Hidden on Level 3 -->
             <div id="word-builder-wrapper" style="margin-top: 0.6rem;">
               <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
                 <span>🧱 單詞積木拼句 (點擊積木依序拼裝)：</span>
@@ -118,7 +151,6 @@
               <div id="word-chips-container" class="word-builder-box"></div>
             </div>
 
-            <!-- Level 3 Direct Input Notice -->
             <div id="advanced-notice" style="display: none; padding: 0.5rem; color: var(--accent-green); font-size: 0.8rem; text-align: center;">
               🔥 已晉級至「⭐⭐⭐ 流利直覺模式」：請直接在下方輸入目標語言作答（或輸入母語意圖）！
             </div>
@@ -163,7 +195,41 @@
       </div>
     </section>
 
-    <!-- 2. IR Sandbox Tab -->
+    <!-- 2. Personal Notebook & Vocabulary Bank Tab -->
+    <section id="notebook-tab" class="tab-pane">
+      <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 1.25rem;">
+        
+        <!-- Vocabulary Bank -->
+        <div class="glass-card">
+          <div class="card-title" style="justify-content: space-between;">
+            <span>🗂️ 個人專屬單字庫 (<span id="notebook-vocab-count">0</span> 個已掌握詞彙)</span>
+            <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="loadNotebook()">🔄 重新載入</button>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            根據你的作答自動提煉並追蹤單字熟練度，點擊單字可隨時播放發音：
+          </p>
+          <div id="vocab-bank-container" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 520px; overflow-y: auto; padding-right: 0.3rem;">
+            <!-- Dynamically populated vocabulary items -->
+          </div>
+        </div>
+
+        <!-- Practiced Sentences & Review -->
+        <div class="glass-card">
+          <div class="card-title" style="justify-content: space-between;">
+            <span>📝 歷史練習句子複習 (<span id="notebook-sentence-count">0</span> 句)</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            檢視歷史練習對話、母語對照、反應速度與 IR 結構，可點擊「複習」再次練習：
+          </p>
+          <div id="sentence-history-container" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 520px; overflow-y: auto; padding-right: 0.3rem;">
+            <!-- Dynamically populated sentence history -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3. IR Sandbox Tab -->
     <section id="ir-sandbox-tab" class="tab-pane">
       <div class="glass-card">
         <div class="card-title">⚡ 雙向 IR 轉換沙盒 (Language A ↔ Universal IR ↔ Language B)</div>
@@ -195,7 +261,7 @@
       </div>
     </section>
 
-    <!-- 3. Skill Graph Tab -->
+    <!-- 4. Skill Graph Tab -->
     <section id="skills-tab" class="tab-pane">
       <div class="glass-card">
         <div class="card-title">🧬 20 Universal Skills & Multilingual Mappings (JA & ES)</div>
@@ -203,7 +269,7 @@
       </div>
     </section>
 
-    <!-- 4. Mastery & Analytics Tab -->
+    <!-- 5. Mastery & Analytics Tab -->
     <section id="analytics-tab" class="tab-pane">
       <div class="glass-card">
         <div class="card-title">📊 多維度能力掌握雷達 (Multidimensional Mastery)</div>
@@ -237,7 +303,7 @@
       </div>
     </section>
 
-    <!-- 5. Simulation Runner Tab -->
+    <!-- 6. Simulation Runner Tab -->
     <section id="sim-tab" class="tab-pane">
       <div class="glass-card">
         <div class="card-title">🚀 自適應難度與間隔學習模擬驗證 (Spaced & Adaptive Simulation)</div>
@@ -264,9 +330,9 @@
       <div class="modal-step">
         <div class="step-num">1</div>
         <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">看懂頂部「學習任務」與「結構公式」</div>
+          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">登入官網帳號並查看任務公式</div>
           <div style="font-size:0.85rem; color:#94a3b8;">
-            不必直接看懂外語！先看上方任務說明（如：「表達明天下雨就不去」）與句型公式（如：<code>[Si 如果] + [llueve 下雨] + [no voy 我不去]</code>）。
+            登入 Google / LINE / GitHub 帳號即可跨裝置同步個人學習紀錄、單字庫與遺忘曲線！
           </div>
         </div>
       </div>
@@ -284,9 +350,9 @@
       <div class="modal-step">
         <div class="step-num">3</div>
         <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">自適應升降難度與能力成長</div>
+          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">隨時在「個人紀錄與單字庫」複習</div>
           <div style="font-size:0.85rem; color:#94a3b8;">
-            連對時系統會自動進階（隱藏選句 ➔ 隱藏積木），出錯時會自動降級提供更多鷹架輔助！
+            每一回合練習過的單字與句子都會自動收錄在專屬單字庫，點擊發音與複習，鞏固長效記憶！
           </div>
         </div>
       </div>

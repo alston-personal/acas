@@ -1,6 +1,10 @@
 // ACAS Web Client Logic
 let turnStartTime = Date.now();
-let currentLearnerId = "web_user";
+let currentLearnerId = "guest_user";
+let currentUsername = "Guest";
+let currentProvider = "local";
+let isLoggedIn = false;
+
 let targetLanguage = "es";
 let nativeLanguage = "zh-TW";
 let currentDifficultyLevel = 1; // 1: Novice, 2: Intermediate, 3: Advanced
@@ -12,6 +16,32 @@ const API_BASE = window.location.pathname.endsWith('/') ? window.location.pathna
 function apiUrl(path) {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return API_BASE + cleanPath;
+}
+
+// Check unified portal session
+async function checkAuthSession() {
+  try {
+    const res = await fetch('/dashboard/api/auth/session');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.loggedIn && data.username) {
+        isLoggedIn = true;
+        currentUsername = data.username;
+        currentProvider = data.provider || 'portal';
+        currentLearnerId = `user_${data.username}`;
+
+        document.getElementById('auth-logged-out').style.display = 'none';
+        document.getElementById('auth-logged-in').style.display = 'flex';
+        document.getElementById('user-display-name').innerText = data.username;
+        document.getElementById('user-provider-tag').innerText = `(${currentProvider})`;
+        
+        const avatarIcons = { google: '🔴', line: '💬', github: '🐱' };
+        document.getElementById('user-avatar-icon').innerText = avatarIcons[currentProvider] || '👤';
+      }
+    }
+  } catch (e) {
+    console.log('Portal auth check failed or running standalone mode:', e);
+  }
 }
 
 const I18N = {
@@ -79,8 +109,8 @@ function updateDifficultyUI() {
     badge.innerText = i18n.diffL2;
     badge.style.borderColor = "var(--accent-blue)";
     badge.style.color = "#60a5fa";
-    quickWrap.style.display = "none"; // Hide direct sentence choices
-    wordWrap.style.display = "block"; // Show word blocks
+    quickWrap.style.display = "none";
+    wordWrap.style.display = "block";
     advNotice.style.display = "none";
     formulaContainer.style.display = "flex";
   } else {
@@ -108,6 +138,7 @@ function switchTab(tabId) {
   document.getElementById(tabId).classList.add('active');
   event.target.classList.add('active');
 
+  if (tabId === 'notebook-tab') loadNotebook();
   if (tabId === 'skills-tab') loadSkills();
   if (tabId === 'analytics-tab') loadProgress();
 }
@@ -122,7 +153,7 @@ function speakText(text, lang) {
   }
 }
 
-// Scaffolding database with clean language separation
+// Scaffolding database
 const MISSIONS_DATA = {
   "daily.weather.plan": {
     formula_es: "[Si 如果] + [llueve 下雨], [no saldré / no voy 我不出門]",
@@ -241,11 +272,9 @@ function renderScaffolding(scenarioId) {
   const mData = MISSIONS_DATA[scenarioId] || MISSIONS_DATA["daily.weather.plan"];
   const langData = mData[targetLanguage] || mData["es"];
 
-  // Formula
   const formula = targetLanguage === 'es' ? mData.formula_es : (targetLanguage === 'ja' ? mData.formula_ja : mData.formula_en);
   document.getElementById('mission-formula').innerText = formula;
 
-  // Options
   const optContainer = document.getElementById('quick-options-container');
   optContainer.innerHTML = '';
   langData.options.forEach(opt => {
@@ -259,7 +288,6 @@ function renderScaffolding(scenarioId) {
     optContainer.appendChild(btn);
   });
 
-  // Word Chips
   const wordContainer = document.getElementById('word-chips-container');
   wordContainer.innerHTML = '';
   langData.words.forEach(item => {
@@ -324,7 +352,6 @@ async function submitResponse() {
   let text = input.value.trim();
   if (!text) return;
 
-  // Native intent mapping
   const isChinese = /[\u4e00-\u9fa5]/.test(text) && !/[\u3040-\u309f\u30a0-\u30ff]/.test(text);
   if (isChinese) {
     if (targetLanguage === 'es') {
@@ -369,7 +396,15 @@ async function submitResponse() {
   const res = await fetch(apiUrl('api/session/submit'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ learner_id: currentLearnerId, native_language: nativeLanguage, target_language: targetLanguage, response_text: text, latency_ms: latency })
+    body: JSON.stringify({
+      learner_id: currentLearnerId,
+      native_language: nativeLanguage,
+      target_language: targetLanguage,
+      response_text: text,
+      latency_ms: latency,
+      prompt_target_lang: currentPromptData ? currentPromptData.prompt_target_lang : '',
+      prompt_native_translation: currentPromptData ? currentPromptData.prompt_native_translation : ''
+    })
   });
   const data = await res.json();
 
@@ -383,6 +418,73 @@ async function submitResponse() {
   document.getElementById('stat-natural').innerText = `${Math.round(data.analysis.naturalness * 100)}%`;
 
   document.getElementById('ir-tree-display').innerText = JSON.stringify(data.analysis.parsed_ir, null, 2);
+}
+
+// Load Personal Vocabulary Bank & Sentence Review
+async function loadNotebook() {
+  try {
+    const res = await fetch(apiUrl(`api/notebook/${currentLearnerId}`));
+    const data = await res.json();
+
+    const vocabContainer = document.getElementById('vocab-bank-container');
+    const sentContainer = document.getElementById('sentence-history-container');
+    vocabContainer.innerHTML = '';
+    sentContainer.innerHTML = '';
+
+    const vocabList = Object.values(data.vocabulary_bank || {});
+    document.getElementById('notebook-vocab-count').innerText = vocabList.length;
+    document.getElementById('notebook-sentence-count').innerText = (data.sentence_history || []).length;
+
+    if (vocabList.length === 0) {
+      vocabContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:1rem; text-align:center;">尚未收錄單字，開始進行對話練習即可自動收錄！</div>';
+    } else {
+      vocabList.forEach(v => {
+        const card = document.createElement('div');
+        card.className = 'vocab-card';
+        const masteryPercent = Math.round(v.mastery_score * 100);
+        card.innerHTML = `
+          <div>
+            <div class="vocab-word">
+              <span>${v.word}</span>
+              <button class="sound-btn" onclick="speakText('${v.word}', '${v.language === 'es' ? 'es-ES' : (v.language === 'ja' ? 'ja-JP' : 'en-US')}')">🔊</button>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.2rem;">
+              練習次數: ${v.count} 次 · 語言: ${v.language.toUpperCase()}
+            </div>
+          </div>
+          <div style="text-align: right; min-width: 90px;">
+            <span style="font-size:0.8rem; font-weight:700; color:var(--accent-green);">${masteryPercent}%</span>
+            <div class="progress-bar-container" style="height:4px; margin-top:0.2rem;"><div class="progress-bar-fill" style="width:${masteryPercent}%;"></div></div>
+          </div>
+        `;
+        vocabContainer.appendChild(card);
+      });
+    }
+
+    const sentences = data.sentence_history || [];
+    if (sentences.length === 0) {
+      sentContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:1rem; text-align:center;">尚未有歷史練習句子，前往 Live Session 回答對話即可記錄！</div>';
+    } else {
+      sentences.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'sentence-card';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.75rem; color:var(--text-muted);">${new Date(s.timestamp * 1000).toLocaleTimeString()}</span>
+            <span style="font-size:0.75rem; color:var(--accent-cyan); font-weight:600;">準確率: ${Math.round(s.grammar_accuracy * 100)}% · 延遲: ${Math.round(s.latency_ms)}ms</span>
+          </div>
+          <div style="font-size:0.85rem; color:var(--text-secondary);">❓ AI: ${s.prompt_target} (${s.prompt_native})</div>
+          <div style="font-weight:600; color:#fff; display:flex; align-items:center; gap:0.4rem;">
+            <span>💬 ${s.response_text}</span>
+            <button class="sound-btn" onclick="speakText('${s.response_text}', '${s.target_language === 'es' ? 'es-ES' : (s.target_language === 'ja' ? 'ja-JP' : 'en-US')}')">🔊</button>
+          </div>
+        `;
+        sentContainer.appendChild(card);
+      });
+    }
+  } catch (e) {
+    console.error('Failed to load notebook:', e);
+  }
 }
 
 async function testIRTransform() {
@@ -468,7 +570,8 @@ async function runSim(turns) {
   out.innerText = `✅ Adaptive Difficulty Simulation Completed (${data.turns_completed} turns):\n\n` + JSON.stringify(data.history, null, 2);
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  await checkAuthSession();
   loadNextTurn();
   testIRTransform();
 });

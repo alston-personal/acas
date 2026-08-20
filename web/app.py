@@ -1,16 +1,18 @@
 """
 ACAS Web API Application
 
-FastAPI Backend providing full endpoints for interactive conversation,
-skill graph exploration, IR bidirectional conversion, and dynamic adaptive difficulty.
+FastAPI Backend with unified portal auth integration, personal learner persistence,
+vocabulary bank, and sentence review storage.
 """
 
+import os
+import json
 import time
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pathlib import Path
 
 from engine.session import ACASSessionEngine
@@ -32,10 +34,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+DATA_DIR = Path("/home/ubuntu/agent-data/projects/acas/learners")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 engines: Dict[str, ACASSessionEngine] = {}
 ja_adapter = JapaneseAdapter()
 en_adapter = EnglishAdapter()
 es_adapter = SpanishAdapter()
+
+
+def get_user_storage_path(learner_id: str) -> Path:
+    clean_id = "".join(c for c in learner_id if c.isalnum() or c in ("-", "_", "@", "."))
+    return DATA_DIR / f"{clean_id}.json"
+
+
+def load_user_notebook(learner_id: str) -> Dict[str, Any]:
+    p = get_user_storage_path(learner_id)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {
+        "learner_id": learner_id,
+        "vocabulary_bank": {},
+        "sentence_history": [],
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+
+
+def save_user_notebook(learner_id: str, data: Dict[str, Any]):
+    p = get_user_storage_path(learner_id)
+    data["updated_at"] = time.time()
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def get_engine(learner_id: str = "web_user", native_language: str = "zh-TW", target_language: str = "es") -> ACASSessionEngine:
@@ -68,6 +100,8 @@ class SubmitResponseRequest(BaseModel):
     target_language: str = "es"
     response_text: str
     latency_ms: float
+    prompt_target_lang: Optional[str] = None
+    prompt_native_translation: Optional[str] = None
 
 
 class IRTransformRequest(BaseModel):
@@ -97,10 +131,18 @@ def get_skills():
     }
 
 
+@app.get("/api/notebook/{learner_id}")
+def get_notebook(learner_id: str):
+    """Retrieve personal vocabulary bank and sentence review history."""
+    data = load_user_notebook(learner_id)
+    return data
+
+
 @app.get("/api/progress/{learner_id}")
 def get_progress(learner_id: str, native_language: str = "zh-TW", target_language: str = "es"):
     engine = get_engine(learner_id, native_language=native_language, target_language=target_language)
     prog = engine.compute_progress()
+    notebook = load_user_notebook(learner_id)
     
     skill_states = {}
     for sid, st in engine.profile.skills.items():
@@ -124,6 +166,8 @@ def get_progress(learner_id: str, native_language: str = "zh-TW", target_languag
         "dimensions": prog.dimensions.model_dump(),
         "mastered_skills_count": prog.mastered_skills_count,
         "total_skills_count": prog.total_skills_count,
+        "vocabulary_count": len(notebook.get("vocabulary_bank", {})),
+        "sentences_practiced_count": len(notebook.get("sentence_history", [])),
         "skill_states": skill_states,
         "total_events": len(engine.event_store.get_all_events()),
     }
@@ -133,18 +177,16 @@ def get_progress(learner_id: str, native_language: str = "zh-TW", target_languag
 def next_turn(req: NextTurnRequest):
     engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
     
-    # Retrieve structured scenario
     all_scenarios = global_scenario_registry.list_all()
     scenario = all_scenarios[(engine.session_turn_count) % len(all_scenarios)]
     engine.session_turn_count += 1
-    engine.current_prompt = scenario.expected_ir # Set context
+    engine.current_prompt = scenario.expected_ir
 
     pdata = scenario.prompt_data
     prompt_target = pdata.prompts_target.get(req.target_language, pdata.prompts_target.get("es", ""))
     trans_native = pdata.translations_native.get(req.native_language, pdata.translations_native.get("zh-TW", ""))
     hints_native = pdata.hints_native.get(req.native_language, pdata.hints_native.get("zh-TW", ""))
     
-    # Clean language skills tag (No Japanese IDs shown when learning Spanish!)
     target_skills = pdata.target_skills_by_lang.get(req.target_language, pdata.target_skills_universal)
 
     return {
@@ -168,10 +210,49 @@ def submit_response(req: SubmitResponseRequest):
     
     analysis = engine.process_response(req.response_text, req.latency_ms)
     
-    # Check success threshold
     is_success = (analysis.grammar_accuracy >= 0.7 and analysis.semantic_correctness >= 0.7)
     engine.profile.update_adaptive_difficulty(is_success)
     
+    # Save to personal user notebook
+    notebook = load_user_notebook(req.learner_id)
+    
+    # Record sentence history
+    sentence_entry = {
+        "timestamp": time.time(),
+        "target_language": req.target_language,
+        "prompt_target": req.prompt_target_lang or "",
+        "prompt_native": req.prompt_native_translation or "",
+        "response_text": req.response_text,
+        "latency_ms": req.latency_ms,
+        "grammar_accuracy": round(analysis.grammar_accuracy, 2),
+        "semantic_correctness": round(analysis.semantic_correctness, 2),
+        "naturalness": round(analysis.naturalness, 2),
+        "detected_skills": analysis.detected_skills,
+        "parsed_ir": analysis.parsed_ir,
+    }
+    notebook["sentence_history"].insert(0, sentence_entry)
+    if len(notebook["sentence_history"]) > 100:
+        notebook["sentence_history"].pop()
+
+    # Extract & record vocabulary tokens into user's vocabulary bank
+    words = req.response_text.replace("、", " ").replace("。", " ").replace(",", " ").replace(".", " ").replace("¿", " ").replace("?", " ").replace("¡", " ").replace("!", " ").split()
+    for w in words:
+        clean_w = w.strip()
+        if len(clean_w) > 1:
+            if clean_w not in notebook["vocabulary_bank"]:
+                notebook["vocabulary_bank"][clean_w] = {
+                    "word": clean_w,
+                    "language": req.target_language,
+                    "count": 0,
+                    "last_seen": time.time(),
+                    "mastery_score": 0.5,
+                }
+            notebook["vocabulary_bank"][clean_w]["count"] += 1
+            notebook["vocabulary_bank"][clean_w]["last_seen"] = time.time()
+            if is_success:
+                notebook["vocabulary_bank"][clean_w]["mastery_score"] = min(1.0, notebook["vocabulary_bank"][clean_w]["mastery_score"] + 0.1)
+
+    save_user_notebook(req.learner_id, notebook)
     progress = engine.compute_progress()
 
     return {
@@ -201,14 +282,12 @@ def transform_ir(req: IRTransformRequest):
         elif req.source_language == "es":
             ir = es_adapter.parse(req.text_or_json)
         elif req.source_language == "ir":
-            import json
             data = json.loads(req.text_or_json)
             ir = CommunicationIR.from_dict(data)
         else:
             raise HTTPException(status_code=400, detail="Invalid source language")
 
         valid, errors = IRValidator.validate_ir(ir)
-        
         ja_out = ja_adapter.realize(ir)
         en_out = en_adapter.realize(ir)
         es_out = es_adapter.realize(ir)

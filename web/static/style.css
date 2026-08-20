@@ -102,7 +102,7 @@ header {
 .lang-controls {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
@@ -124,6 +124,67 @@ header {
   font-size: 0.8rem;
   outline: none;
   cursor: pointer;
+}
+
+/* Auth Dropdown */
+.auth-box {
+  position: relative;
+}
+
+.auth-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.auth-dropdown:hover .auth-dropdown-menu {
+  display: flex;
+}
+
+.auth-dropdown-menu {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #111827;
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+  padding: 0.4rem;
+  z-index: 200;
+  min-width: 170px;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+
+.auth-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #fff;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.auth-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.line-item:hover {
+  background: rgba(0, 195, 0, 0.2);
+  color: #00c300;
+}
+
+.google-item:hover {
+  background: rgba(234, 67, 53, 0.2);
+  color: #ea4335;
+}
+
+.github-item:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 nav {
@@ -575,6 +636,36 @@ main {
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--accent-cyan);
+}
+
+/* Notebook & Vocab Card */
+.vocab-card {
+  background: rgba(18, 25, 41, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vocab-word {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sentence-card {
+  background: rgba(18, 25, 41, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 /* Tutorial Modal */
