@@ -2,6 +2,14 @@
 let turnStartTime = Date.now();
 let currentLearnerId = "web_user";
 
+// Base API URL prefix support (supports both '/' and '/acas/' reverse proxy)
+const API_BASE = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+
+function apiUrl(path) {
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  return API_BASE + cleanPath;
+}
+
 function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
@@ -14,7 +22,7 @@ function switchTab(tabId) {
 
 async function loadNextTurn() {
   turnStartTime = Date.now();
-  const res = await fetch('/api/session/next-turn', {
+  const res = await fetch(apiUrl('api/session/next-turn'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ learner_id: currentLearnerId })
@@ -55,7 +63,7 @@ async function submitResponse() {
   chat.appendChild(bubble);
   chat.scrollTop = chat.scrollHeight;
 
-  const res = await fetch('/api/session/submit', {
+  const res = await fetch(apiUrl('api/session/submit'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ learner_id: currentLearnerId, response_text: text, latency_ms: latency })
@@ -75,7 +83,7 @@ async function testIRTransform() {
   const isJa = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf]/.test(text);
   const srcLang = isJa ? 'ja' : 'en';
 
-  const res = await fetch('/api/transform', {
+  const res = await fetch(apiUrl('api/transform'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source_language: srcLang, text_or_json: text, target_language: 'ir' })
@@ -87,7 +95,7 @@ async function testIRTransform() {
 }
 
 async function loadSkills() {
-  const res = await fetch('/api/skills');
+  const res = await fetch(apiUrl('api/skills'));
   const data = await res.json();
   const container = document.getElementById('skills-container');
   container.innerHTML = '';
@@ -109,7 +117,7 @@ async function loadSkills() {
 }
 
 async function loadProgress() {
-  const res = await fetch(`/api/progress/${currentLearnerId}`);
+  const res = await fetch(apiUrl(`api/progress/${currentLearnerId}`));
   const data = await res.json();
   const d = data.dimensions;
 
@@ -132,7 +140,7 @@ async function loadProgress() {
 async function runSim(turns) {
   const out = document.getElementById('sim-output');
   out.innerText = `Running ${turns}-turn adaptive learning simulation...\n`;
-  const res = await fetch('/api/simulation/run', {
+  const res = await fetch(apiUrl('api/simulation/run'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ learner_id: 'sim_runner', turns: turns })
