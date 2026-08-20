@@ -1,0 +1,17 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# AgentOS Symlinks & Data Layer Separation (Strict Rule)
+STATUS.md
+memory
+memory/
+*.log
+
+# Environment & IDE
+.env
+.vscode/
+.idea/

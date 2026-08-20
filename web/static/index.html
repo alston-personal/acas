@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACAS - Universal Communication IR Learning System</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon">🌐</div>
+      <div class="logo-text">
+        <h1>ACAS Engine</h1>
+        <span>Universal Communication IR v0.1</span>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-btn active" onclick="switchTab('session-tab')">💬 Live Session</button>
+      <button class="nav-btn" onclick="switchTab('ir-sandbox-tab')">⚡ IR Sandbox</button>
+      <button class="nav-btn" onclick="switchTab('skills-tab')">🧬 Skill Graph</button>
+      <button class="nav-btn" onclick="switchTab('analytics-tab')">📊 Mastery & Retention</button>
+      <button class="nav-btn" onclick="switchTab('sim-tab')">🚀 Simulation Runner</button>
+    </nav>
+  </header>
+
+  <main>
+    
+    <!-- 1. Live Session Tab -->
+    <section id="session-tab" class="tab-pane active">
+      <div class="session-grid">
+        <div class="glass-card chat-container">
+          <div class="card-title">
+            <span>🤖 Contextual Dialogue Interaction</span>
+            <button class="btn-primary" style="margin-left: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadNextTurn()">Next Turn ➔</button>
+          </div>
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input-bar">
+            <input type="text" id="user-input" class="chat-input" placeholder="Type your Japanese response (e.g. 明日雨が降ったら、東京に行きません)..." onkeypress="handleKeyPress(event)">
+            <button class="btn-primary" onclick="submitResponse()">Send ➔</button>
+          </div>
+        </div>
+
+        <div class="analytics-panel">
+          <div class="glass-card">
+            <div class="card-title">⚡ Response Performance & Latency</div>
+            <div class="metric-grid">
+              <div class="metric-box">
+                <div class="metric-label">Response Latency</div>
+                <div id="stat-latency" class="metric-val">-- ms</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-label">Grammar Accuracy</div>
+                <div id="stat-grammar" class="metric-val">--%</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-label">Semantic Match</div>
+                <div id="stat-semantic" class="metric-val">--%</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-label">Naturalness</div>
+                <div id="stat-natural" class="metric-val">--%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="card-title">🔍 Language-Agnostic IR Tree</div>
+            <pre id="ir-tree-display" class="ir-tree-viewer">// Universal Communication IR will appear here...</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. IR Sandbox Tab -->
+    <section id="ir-sandbox-tab" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">⚡ Bidirectional IR Transformation Sandbox (Language A ↔ IR ↔ Language B)</div>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+          Demonstrates zero-leakage language-independence: Japanese and English map cleanly to the same Universal IR without language contamination.
+        </p>
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+          <input type="text" id="sandbox-input" class="chat-input" value="明日雨が降ったら、行かない。" placeholder="Enter sentence in Japanese or English...">
+          <button class="btn-primary" onclick="testIRTransform()">Transform ➔</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="metric-box">
+            <div class="metric-label">Realized Japanese</div>
+            <div id="sandbox-ja" class="metric-val" style="font-size: 1rem; color: #fff; margin-top: 0.5rem;">--</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">Realized English</div>
+            <div id="sandbox-en" class="metric-val" style="font-size: 1rem; color: #fff; margin-top: 0.5rem;">--</div>
+          </div>
+        </div>
+        <div style="margin-top: 1rem;">
+          <div class="metric-label" style="margin-bottom: 0.5rem;">Universal Communication IR (Pydantic / JSON)</div>
+          <pre id="sandbox-ir" class="ir-tree-viewer" style="max-height: 260px;">// Transformed IR JSON output...</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Skill Graph Tab -->
+    <section id="skills-tab" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">🧬 20 Universal Skills & Japanese Mappings</div>
+        <div id="skills-container" class="skills-grid"></div>
+      </div>
+    </section>
+
+    <!-- 4. Mastery & Analytics Tab -->
+    <section id="analytics-tab" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">📊 Multidimensional Learner Mastery Radar</div>
+        <div class="radar-grid">
+          <div class="progress-card">
+            <div class="metric-label">Overall Mastery</div>
+            <div id="rad-overall" class="progress-val">0%</div>
+            <div class="progress-bar-container"><div id="bar-overall" class="progress-bar-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="progress-card">
+            <div class="metric-label">Production</div>
+            <div id="rad-prod" class="progress-val">0%</div>
+            <div class="progress-bar-container"><div id="bar-prod" class="progress-bar-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="progress-card">
+            <div class="metric-label">Recognition</div>
+            <div id="rad-rec" class="progress-val">0%</div>
+            <div class="progress-bar-container"><div id="bar-rec" class="progress-bar-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="progress-card">
+            <div class="metric-label">Automaticity (Speed)</div>
+            <div id="rad-auto" class="progress-val">0%</div>
+            <div class="progress-bar-container"><div id="bar-auto" class="progress-bar-fill" style="width: 0%"></div></div>
+          </div>
+          <div class="progress-card">
+            <div class="metric-label">Retention (Memory)</div>
+            <div id="rad-ret" class="progress-val">0%</div>
+            <div class="progress-bar-container"><div id="bar-ret" class="progress-bar-fill" style="width: 0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Simulation Runner Tab -->
+    <section id="sim-tab" class="tab-pane">
+      <div class="glass-card">
+        <div class="card-title">🚀 Spaced Learning Simulation Runner (H1-H6 Verification)</div>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+          Run batch interactive learning loops to verify the Memory Model retention growth and Scheduler priority balancing.
+        </p>
+        <button class="btn-primary" onclick="runSim(10)">Run 10-Turn Adaptive Simulation ➔</button>
+        <div style="margin-top: 1.5rem;">
+          <pre id="sim-output" class="ir-tree-viewer" style="max-height: 350px;">// Simulation logs will appear here...</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
