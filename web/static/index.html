@@ -36,11 +36,35 @@
         <div class="glass-card chat-container">
           <div class="card-title">
             <span>🤖 Contextual Dialogue Interaction</span>
-            <button class="btn-primary" style="margin-left: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadNextTurn()">Next Turn ➔</button>
+            <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
+              <label style="font-size: 0.8rem; color: var(--accent-amber); display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
+                <input type="checkbox" id="beginner-mode-toggle" checked onchange="toggleBeginnerMode()">
+                🔰 初學者引導模式 (Beginner Mode)
+              </label>
+              <button class="btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="loadNextTurn()">Next Turn ➔</button>
+            </div>
           </div>
           <div id="chat-messages" class="chat-messages"></div>
+
+          <!-- Beginner Interactive Scaffolding Panel -->
+          <div id="scaffolding-panel" class="scaffolding-box">
+            <div class="scaffolding-title">
+              <span>🧩 初學者鷹架輔助 (點擊選項或拼詞作答)：</span>
+            </div>
+            <div id="quick-options-container" class="chips-container">
+              <!-- Dynamically populated options -->
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+              🧱 單詞積木拼句 (點擊拼裝)：
+            </div>
+            <div id="word-chips-container" class="word-builder-box">
+              <!-- Dynamically populated word chips -->
+            </div>
+          </div>
+
           <div class="chat-input-bar">
-            <input type="text" id="user-input" class="chat-input" placeholder="Type your Japanese response (e.g. 明日雨が降ったら、東京に行きません)..." onkeypress="handleKeyPress(event)">
+            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入日文、中文意向，或點擊上方積木作答..." onkeypress="handleKeyPress(event)">
+            <button class="btn-secondary" onclick="clearInput()" title="清空輸入框">重填</button>
             <button class="btn-primary" onclick="submitResponse()">Send ➔</button>
           </div>
         </div>
