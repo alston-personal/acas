@@ -18,6 +18,7 @@ from engine.session import ACASSessionEngine
 from core.skill_graph import global_skill_graph
 from core.validator import IRValidator
 from core.ir_schema import CommunicationIR
+from core.conversation_generator import GeneratedPrompt
 from scenarios.registry import global_scenario_registry
 from languages.ja.adapter import JapaneseAdapter
 from languages.en.adapter import EnglishAdapter
@@ -100,8 +101,8 @@ class SubmitResponseRequest(BaseModel):
     learner_id: str = "web_user"
     native_language: str = "zh-TW"
     target_language: str = "es"
-    episode_id: str
-    turn_index: int
+    episode_id: str = "restaurant_tapas"
+    turn_index: int = 0
     response_text: str
     latency_ms: float
     prompt_target_lang: Optional[str] = None
@@ -127,7 +128,6 @@ def health_check():
 
 @app.get("/api/episodes")
 def get_episodes(native_language: str = "zh-TW"):
-    """List all available story episodes."""
     episodes = []
     for ep in global_scenario_registry.list_all():
         episodes.append({
@@ -192,6 +192,18 @@ def next_turn(req: NextTurnRequest):
     choices = turn.choices_by_lang.get(req.target_language, turn.choices_by_lang.get("es", []))
     words = turn.words_by_lang.get(req.target_language, turn.words_by_lang.get("es", []))
 
+    # Set engine active prompt to guarantee process_response works
+    engine.current_prompt = GeneratedPrompt(
+        scenario_id=episode.episode_id,
+        domain=episode.domain,
+        turn_index=current_turn_idx + 1,
+        prompt_text_ja=prompt_target,
+        prompt_text_en=trans_native,
+        target_skills=target_skills,
+        hints=hints_native,
+        expected_ir={},
+    )
+
     return {
         "episode_id": episode.episode_id,
         "episode_title": episode.title_native.get(req.native_language, episode.title_native.get("zh-TW", "")),
@@ -215,13 +227,29 @@ def next_turn(req: NextTurnRequest):
 @app.post("/api/session/submit")
 def submit_response(req: SubmitResponseRequest):
     engine = get_engine(req.learner_id, native_language=req.native_language, target_language=req.target_language)
+    episode = global_scenario_registry.get(req.episode_id) or global_scenario_registry.list_all()[0]
+    turn = episode.turns[req.turn_index % len(episode.turns)]
+    target_skills = turn.target_skills_by_lang.get(req.target_language, turn.target_skills_universal)
+
+    # Always ensure active prompt exists
+    if not engine.current_prompt:
+        engine.current_prompt = GeneratedPrompt(
+            scenario_id=episode.episode_id,
+            domain=episode.domain,
+            turn_index=req.turn_index + 1,
+            prompt_text_ja=req.prompt_target_lang or turn.prompts_target.get(req.target_language, ""),
+            prompt_text_en=req.prompt_native_translation or "",
+            target_skills=target_skills,
+            hints="",
+            expected_ir={},
+        )
+
     analysis = engine.process_response(req.response_text, req.latency_ms)
     
     is_success = (analysis.grammar_accuracy >= 0.65)
     engine.profile.update_adaptive_difficulty(is_success)
 
     notebook = load_user_notebook(req.learner_id)
-    episode = global_scenario_registry.get(req.episode_id) or global_scenario_registry.list_all()[0]
 
     # Advance to next turn in story on success
     if is_success:
@@ -233,15 +261,15 @@ def submit_response(req: SubmitResponseRequest):
         "timestamp": time.time(),
         "episode_id": req.episode_id,
         "target_language": req.target_language,
-        "prompt_target": req.prompt_target_lang or "",
-        "prompt_native": req.prompt_native_translation or "",
+        "prompt_target": req.prompt_target_lang or turn.prompts_target.get(req.target_language, ""),
+        "prompt_native": req.prompt_native_translation or turn.translations_native.get(req.native_language, ""),
         "response_text": req.response_text,
         "latency_ms": req.latency_ms,
         "grammar_accuracy": round(analysis.grammar_accuracy, 2),
         "semantic_correctness": round(analysis.semantic_correctness, 2),
         "naturalness": round(analysis.naturalness, 2),
         "detected_skills": analysis.detected_skills,
-        "parsed_ir": analysis.parsed_ir,
+        "parsed_ir": analysis.parsed_ir.model_dump() if hasattr(analysis.parsed_ir, 'model_dump') else analysis.parsed_ir,
     }
     notebook["sentence_history"].insert(0, sentence_entry)
     if len(notebook["sentence_history"]) > 100:
@@ -277,7 +305,7 @@ def submit_response(req: SubmitResponseRequest):
             "naturalness": round(analysis.naturalness, 2),
             "pragmatic_appropriateness": round(analysis.pragmatic_appropriateness, 2),
             "detected_skills": analysis.detected_skills,
-            "parsed_ir": analysis.parsed_ir,
+            "parsed_ir": analysis.parsed_ir.model_dump() if hasattr(analysis.parsed_ir, 'model_dump') else analysis.parsed_ir,
             "latency_ms": req.latency_ms,
         },
         "is_success": is_success,
