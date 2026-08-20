@@ -1,4 +1,4 @@
-// ACAS Universal Communication IR - SLA Dynamic Multi-Track Client
+// ACAS Universal Communication IR - Cognitive SLA Active Assembly Engine
 let turnStartTime = Date.now();
 let currentLearnerId = "guest_user";
 let currentUsername = "Guest";
@@ -10,9 +10,29 @@ let currentEpisodeId = "restaurant_tapas";
 let currentTurnIndex = 0;
 let currentDifficultyLevel = 1;
 let currentPromptData = null;
+let lastSubmittedText = "";
 let allEpisodes = [];
 
 let assembledWords = [];
+
+// Rich Contextual Distractor Word Bank
+const DISTRACTORS_DB = {
+  es: [
+    { w: "cerveza", m: "啤酒" }, { w: "vino tinto", m: "紅酒" }, { w: "queso", m: "乳酪" },
+    { w: "mañana", m: "明天" }, { w: "ayer", m: "昨天" }, { w: "saldré", m: "出門" },
+    { w: "no voy", m: "我不去" }, { w: "hotel", m: "飯店" }, { w: "playa", m: "海灘" },
+    { w: "museo", m: "博物館" }, { w: "amigo", m: "朋友" }, { w: "tarjeta", m: "卡片" }
+  ],
+  ja: [
+    { w: "ビール", m: "啤酒" }, { w: "お茶", m: "茶" }, { w: "昨日", m: "昨天" },
+    { w: "明日", m: "明天" }, { w: "行きません", m: "不去" }, { w: "出かけます", m: "出門" },
+    { w: "ホテル", m: "飯店" }, { w: "友達", m: "朋友" }, { w: "カード", m: "信用卡" }
+  ],
+  en: [
+    { w: "beer", m: "啤酒" }, { w: "yesterday", m: "昨天" }, { w: "hotel", m: "飯店" },
+    { w: "museum", m: "博物館" }, { w: "beach", m: "海灘" }, { w: "credit card", m: "信用卡" }
+  ]
+};
 
 const API_BASE = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
 
@@ -21,12 +41,12 @@ function apiUrl(path) {
   return API_BASE + cleanPath;
 }
 
-function switchView(viewId) {
+function switchView(viewId, event) {
   document.querySelectorAll('.view-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-tab-btn').forEach(el => el.classList.remove('active'));
   
   document.getElementById(viewId).classList.add('active');
-  event.target.classList.add('active');
+  if (event && event.target) event.target.classList.add('active');
 
   if (viewId === 'notebook-view') loadNotebook();
   if (viewId === 'engine-view') {
@@ -51,7 +71,7 @@ async function checkAuthSession() {
       }
     }
   } catch (e) {
-    console.log('Portal auth check failed or standalone mode:', e);
+    console.log('Portal auth check:', e);
   }
 }
 
@@ -97,6 +117,11 @@ function changeTargetLanguage(lang) {
   loadNextTurn(false);
 }
 
+function toggleHint() {
+  const hintEl = document.getElementById('intent-xray-box');
+  hintEl.style.display = (hintEl.style.display === 'none') ? 'block' : 'none';
+}
+
 function speakText(text, lang) {
   if ('speechSynthesis' in window) {
     const langCode = lang || (targetLanguage === 'es' ? 'es-ES' : (targetLanguage === 'ja' ? 'ja-JP' : 'en-US'));
@@ -113,7 +138,13 @@ function playCurrentPrompt() {
   }
 }
 
-// Word assembly handlers
+function speakCurrentResponse() {
+  if (lastSubmittedText) {
+    speakText(lastSubmittedText);
+  }
+}
+
+// Word Assembly Logic
 function addWordToSlot(word, poolIndex) {
   assembledWords.push({ word, poolIndex });
   renderAssembledSlots();
@@ -153,7 +184,7 @@ function renderAssembledSlots() {
     if (!fallbackInput.value.trim()) {
       slotsWrapper.classList.remove('has-items');
     }
-    fallbackInput.placeholder = '點擊積木或直接輸入母語/目標語言...';
+    fallbackInput.placeholder = (currentDifficultyLevel === 3) ? '請直接鍵盤輸入或用語音回答...' : '點擊下方詞彙拼裝，或直接鍵盤輸入...';
   }
 }
 
@@ -172,10 +203,21 @@ function handleKeyPress(event) {
   if (event.key === 'Enter') submitResponse();
 }
 
-// Load Next Turn within the Coherent Story Episode
+// Fisher-Yates Shuffle
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Load Next Turn with Cognitive Desirable Difficulty
 async function loadNextTurn(advance = true) {
   turnStartTime = Date.now();
   document.getElementById('feedback-banner').style.display = 'none';
+  document.getElementById('intent-xray-box').style.display = 'none'; // Default collapsed to force active recall
 
   const res = await fetch(apiUrl('api/session/next-turn'), {
     method: 'POST',
@@ -194,7 +236,7 @@ async function loadNextTurn(advance = true) {
   currentTurnIndex = data.turn_index;
   currentDifficultyLevel = data.difficulty_level || 1;
 
-  // Update Episode & Scene Info
+  // Update Episode info
   const epSelect = document.getElementById('episode-select');
   if (epSelect && epSelect.value !== data.episode_id) {
     epSelect.value = data.episode_id;
@@ -207,34 +249,69 @@ async function loadNextTurn(advance = true) {
   // Prompts & Intent X-Ray Skeleton
   document.getElementById('prompt-target-text').innerText = data.prompt_target_lang;
   document.getElementById('prompt-native-text').innerText = data.prompt_native_translation;
+  document.getElementById('challenge-goal').innerText = `任務：${data.hints_native || '自然回答'}`;
   document.getElementById('formula-hint').innerText = data.formula;
 
-  // Render Word Bank
+  // Adaptive Difficulty Level Presentation
+  const diffLabels = {
+    1: "⭐ Level 1: 輔助引導",
+    2: "⭐⭐ Level 2: 純外語挑戰",
+    3: "⭐⭐⭐ Level 3: 實戰盲測"
+  };
+  const diffDesc = {
+    1: "Level 1: 附帶中文對照（順序已打亂 + 混入干擾詞）",
+    2: "Level 2: 隱藏中文釋義（僅顯示目標語言詞彙）",
+    3: "Level 3: 實戰盲測（隱藏詞彙庫，請直接鍵盤或語音回答）"
+  };
+  document.getElementById('difficulty-badge').innerText = diffLabels[currentDifficultyLevel] || "⭐ Level 1";
+  document.getElementById('level-mode-desc').innerText = diffDesc[currentDifficultyLevel] || "";
+
+  // Prepare Word Pool (Shuffled + Distractors)
+  const poolWrapper = document.getElementById('word-pool-wrapper');
   const poolContainer = document.getElementById('word-pool');
   poolContainer.innerHTML = '';
-  (data.words || []).forEach((item, index) => {
-    const btn = document.createElement('button');
-    btn.className = 'chip-block';
-    btn.id = `chip-item-${index}`;
-    btn.innerHTML = `<span>${item.w}</span><span class="chip-sub">(${item.m})</span>`;
-    btn.onclick = () => addWordToSlot(item.w, index);
-    poolContainer.appendChild(btn);
-  });
 
-  // Render Quick Choices
-  const choiceContainer = document.getElementById('quick-choices');
-  choiceContainer.innerHTML = '';
-  (data.choices || []).forEach(ch => {
-    const chip = document.createElement('button');
-    chip.className = 'choice-chip';
-    chip.innerText = `💬 ${ch}`;
-    chip.onclick = () => {
-      clearAssembledWords();
-      document.getElementById('input-fallback').value = ch;
-      document.getElementById('construction-slots').classList.add('has-items');
-    };
-    choiceContainer.appendChild(chip);
-  });
+  if (currentDifficultyLevel === 3) {
+    // Level 3: Hide word pool completely
+    poolWrapper.style.display = 'none';
+  } else {
+    poolWrapper.style.display = 'flex';
+    
+    // Pick 2-3 distractors
+    const allDistractors = DISTRACTORS_DB[targetLanguage] || DISTRACTORS_DB["es"];
+    const shuffledDistractors = shuffleArray(allDistractors).slice(0, 3);
+    
+    // Merge correct words + distractors
+    const rawWords = [...(data.words || [])];
+    const candidateList = [];
+    const usedWordKeys = new Set(rawWords.map(r => r.w.toLowerCase().trim()));
+
+    rawWords.forEach(w => candidateList.push({ w: w.w, m: w.m, isDistractor: false }));
+    shuffledDistractors.forEach(d => {
+      if (!usedWordKeys.has(d.w.toLowerCase().trim())) {
+        candidateList.push({ w: d.w, m: d.m, isDistractor: true });
+      }
+    });
+
+    // Randomize order
+    const finalShuffledPool = shuffleArray(candidateList);
+
+    finalShuffledPool.forEach((item, index) => {
+      const btn = document.createElement('button');
+      btn.className = 'chip-block';
+      btn.id = `chip-item-${index}`;
+      
+      // Level 1 shows (meaning), Level 2 hides meaning
+      if (currentDifficultyLevel === 1) {
+        btn.innerHTML = `<span>${item.w}</span><span class="chip-sub">(${item.m})</span>`;
+      } else {
+        btn.innerHTML = `<span>${item.w}</span>`;
+      }
+      
+      btn.onclick = () => addWordToSlot(item.w, index);
+      poolContainer.appendChild(btn);
+    });
+  }
 
   clearAssembledWords();
 }
@@ -247,11 +324,11 @@ async function submitResponse() {
     text = document.getElementById('input-fallback').value.trim();
   }
   if (!text) return;
+  lastSubmittedText = text;
 
   // Free Intent Mother Tongue to Target Translation Bridge
   const isChinese = /[\u4e00-\u9fa5]/.test(text) && !/[\u3040-\u309f\u30a0-\u30ff]/.test(text);
   if (isChinese && currentPromptData && currentPromptData.choices && currentPromptData.choices.length > 0) {
-    // Intelligently map Chinese intent to closest target realization
     text = currentPromptData.choices[0];
   }
 
@@ -281,12 +358,12 @@ async function submitResponse() {
   
   if (data.is_episode_completed) {
     document.getElementById('feedback-icon').innerText = '🏆';
-    document.getElementById('feedback-title').innerText = '恭喜通關整集情境故事！';
+    document.getElementById('feedback-title').innerText = '恭喜通關整集生活情境劇本！';
     document.getElementById('feedback-detail').innerText = `已完成全劇本對話！獲得整體熟練度提升，單字庫已同步更新。`;
   } else {
     document.getElementById('feedback-icon').innerText = isSuccess ? '🎉' : '💡';
-    document.getElementById('feedback-title').innerText = isSuccess ? '回答精準！' : '可以嘗試調整用詞：';
-    document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法準確: ${Math.round(data.analysis.grammar_accuracy * 100)}% · 意圖: ${data.analysis.parsed_ir.intent?.type || 'INFORM'}`;
+    document.getElementById('feedback-title').innerText = isSuccess ? '回答精準！' : '語序或選詞有誤，請再試一次：';
+    document.getElementById('feedback-detail').innerText = `反應延遲: ${Math.round(data.analysis.latency_ms)}ms · 語法吻合: ${Math.round(data.analysis.grammar_accuracy * 100)}% · 意圖: ${data.analysis.parsed_ir.intent?.type || 'INFORM'}`;
   }
   
   banner.style.display = 'block';
@@ -328,7 +405,7 @@ async function loadNotebook() {
 
     const sentences = data.sentence_history || [];
     if (sentences.length === 0) {
-      sentContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:1.5rem; text-align:center;">尚未有練習紀錄，前往「互動練習」完成對話即可記錄！</div>';
+      sentContainer.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:1.5rem; text-align:center;">尚未有練習紀錄，前往「實戰情境練習」完成對話即可記錄！</div>';
     } else {
       sentences.forEach(s => {
         const row = document.createElement('div');
