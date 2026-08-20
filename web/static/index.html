@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ACAS - Universal Communication IR Learning System</title>
+  <title>ACAS - Universal Communication IR</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,357 +11,268 @@
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
+  <!-- Top App Navigation -->
   <header>
-    <div class="logo-area">
-      <div class="logo-icon">🌐</div>
-      <div class="logo-text">
-        <h1>ACAS Engine</h1>
-        <span>Universal Communication IR v0.1</span>
-      </div>
-    </div>
-    
-    <div class="lang-controls">
-      <!-- 1. Native Language Selector -->
-      <div class="selector-pill">
-        <span style="font-size: 0.75rem; color: var(--accent-amber); font-weight: 600;">🗣️ 母語:</span>
-        <select id="native-language-select" onchange="changeNativeLanguage(this.value)">
-          <option value="zh-TW" style="background:#111827; color:#ffffff;">🇹🇼 繁體中文</option>
-          <option value="zh-CN" style="background:#111827; color:#ffffff;">🇨🇳 简体中文</option>
-          <option value="en" style="background:#111827; color:#ffffff;">🇬🇧 English</option>
-        </select>
-      </div>
+    <a href="#" class="brand">
+      <div class="brand-icon">🌐</div>
+      <div class="brand-title">ACAS Learning</div>
+    </a>
 
-      <!-- 2. Target Learning Language Selector -->
-      <div class="selector-pill">
-        <span style="font-size: 0.75rem; color: var(--accent-cyan); font-weight: 600;">🎯 目標:</span>
+    <!-- Main Clean Navigation Tabs -->
+    <div class="header-center">
+      <button class="nav-tab-btn active" onclick="switchView('practice-view')">💬 互動練習</button>
+      <button class="nav-tab-btn" onclick="switchView('notebook-view')">📖 個人單字庫</button>
+      <button class="nav-tab-btn" onclick="switchView('engine-view')">🔬 IR 核心與分析</button>
+    </div>
+
+    <!-- Header Controls & User Session -->
+    <div class="header-right">
+      
+      <!-- Target Language -->
+      <div class="lang-pill">
+        <span style="font-size:0.75rem; color:var(--accent-cyan); font-weight:700;">學習:</span>
         <select id="target-language-select" onchange="changeTargetLanguage(this.value)">
-          <option value="es" style="background:#111827; color:#ffffff;">🇪🇸 西班牙語 (Spanish)</option>
-          <option value="ja" style="background:#111827; color:#ffffff;">🇯🇵 日語 (Japanese)</option>
-          <option value="en" style="background:#111827; color:#ffffff;">🇬🇧 英語 (English)</option>
+          <option value="es">🇪🇸 西班牙語 (Spanish)</option>
+          <option value="ja">🇯🇵 日語 (Japanese)</option>
+          <option value="en">🇬🇧 英語 (English)</option>
         </select>
       </div>
 
-      <!-- 3. Unified Portal Auth Widget -->
-      <div id="auth-container" class="auth-box">
-        <!-- Logged Out View -->
-        <div id="auth-logged-out" style="display: flex; gap: 0.35rem; align-items: center;">
-          <div class="auth-dropdown">
-            <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
-              🔑 登入官網帳號 ▾
-            </button>
-            <div class="auth-dropdown-menu">
-              <a href="/dashboard/api/auth/signin/line?returnTo=/acas/" class="auth-item line-item">
-                <span>💬 LINE 快速登入</span>
-              </a>
-              <a href="/dashboard/api/auth/signin/google?returnTo=/acas/" class="auth-item google-item">
-                <span>🔴 Google 帳號登入</span>
-              </a>
-              <a href="/dashboard/api/auth/signin/github?returnTo=/acas/" class="auth-item github-item">
-                <span>🐱 GitHub 帳號登入</span>
-              </a>
-            </div>
+      <!-- Native Language -->
+      <div class="lang-pill">
+        <span style="font-size:0.75rem; color:var(--accent-amber); font-weight:700;">母語:</span>
+        <select id="native-language-select" onchange="changeNativeLanguage(this.value)">
+          <option value="zh-TW">🇹🇼 繁中</option>
+          <option value="zh-CN">🇨🇳 简中</option>
+          <option value="en">🇬🇧 EN</option>
+        </select>
+      </div>
+
+      <!-- Auth Dropdown -->
+      <div class="auth-dropdown">
+        <div id="auth-logged-out">
+          <button class="nav-tab-btn" style="background: rgba(255,255,255,0.08);">
+            🔑 登入 ▾
+          </button>
+          <div class="auth-dropdown-menu">
+            <a href="/dashboard/api/auth/signin/line?returnTo=/acas/" class="auth-item" style="color:#00c300;">
+              <span>💬 LINE 快速登入</span>
+            </a>
+            <a href="/dashboard/api/auth/signin/google?returnTo=/acas/" class="auth-item" style="color:#ea4335;">
+              <span>🔴 Google 帳號登入</span>
+            </a>
+            <a href="/dashboard/api/auth/signin/github?returnTo=/acas/" class="auth-item">
+              <span>🐱 GitHub 帳號登入</span>
+            </a>
           </div>
         </div>
 
-        <!-- Logged In View -->
-        <div id="auth-logged-in" style="display: none; align-items: center; gap: 0.5rem;">
-          <div style="font-size: 0.78rem; color: #fff; background: rgba(0,242,254,0.15); border: 1px solid var(--accent-cyan); padding: 0.25rem 0.6rem; border-radius: var(--radius-full); display: flex; align-items: center; gap: 0.3rem;">
-            <span id="user-avatar-icon">👤</span>
-            <span id="user-display-name" style="font-weight: 700;">Learner</span>
-            <span id="user-provider-tag" style="font-size:0.65rem; color:var(--accent-cyan); text-transform:uppercase;">(PORTAL)</span>
+        <div id="auth-logged-in" style="display: none; align-items: center; gap: 0.4rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #fff; background: rgba(0,242,254,0.15); border: 1px solid var(--accent-cyan); padding: 0.25rem 0.65rem; border-radius: var(--radius-full);">
+            <span id="user-display-name">User</span>
           </div>
-          <a href="/dashboard/api/auth/logout?returnTo=/acas/" class="btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.72rem; text-decoration: none;">
-            登出
-          </a>
+          <a href="/dashboard/api/auth/logout?returnTo=/acas/" style="color:var(--text-sub); font-size:0.75rem; text-decoration:none;">登出</a>
         </div>
       </div>
 
-      <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" onclick="openTutorialModal()">❓ 新手引導</button>
     </div>
-
-    <nav>
-      <button class="nav-btn active" onclick="switchTab('session-tab')">💬 Live Session</button>
-      <button class="nav-btn" onclick="switchTab('notebook-tab')">📖 個人紀錄與單字庫</button>
-      <button class="nav-btn" onclick="switchTab('ir-sandbox-tab')">⚡ IR Sandbox</button>
-      <button class="nav-btn" onclick="switchTab('skills-tab')">🧬 Skill Graph</button>
-      <button class="nav-btn" onclick="switchTab('analytics-tab')">📊 Mastery & Retention</button>
-      <button class="nav-btn" onclick="switchTab('sim-tab')">🚀 Simulation Runner</button>
-    </nav>
   </header>
 
-  <!-- Main Workspace -->
+  <!-- Main View Area -->
   <main>
     
-    <!-- 1. Live Interactive Session Tab -->
-    <section id="session-tab" class="tab-pane active">
+    <!-- 1. FOCUSED PRACTICE VIEW (Duolingo/Speak Style Clean Interaction) -->
+    <section id="practice-view" class="view-pane active">
       
-      <!-- Clear Mission & Goal Banner with Adaptive Difficulty Badge -->
-      <div class="mission-box">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-          <div class="mission-tag">🚩 當前學習任務 (CURRENT MISSION)</div>
-          
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <div id="difficulty-badge" style="background: rgba(255, 184, 0, 0.2); border: 1px solid var(--accent-amber); color: #fbbf24; padding: 0.2rem 0.6rem; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 700;">
-              ⭐ Level 1: 入門全引導 (Novice)
-            </div>
-            <div id="target-skill-badge" style="font-size: 0.75rem; color: var(--accent-cyan); font-family: monospace; background: rgba(0,242,254,0.15); padding:0.2rem 0.5rem; border-radius:var(--radius-sm);">
-              CORE.CONDITION
+      <div class="practice-card">
+        
+        <!-- Practice Top Bar -->
+        <div class="practice-header">
+          <div class="scenario-badge">
+            <span id="scenario-icon">🍽️</span>
+            <span id="scenario-title">情境：天氣計劃與出行</span>
+            <span id="scenario-domain" class="scenario-tag">日常情境</span>
+          </div>
+          <div id="difficulty-badge" class="difficulty-indicator">
+            ⭐ Level 1: 入門引導
+          </div>
+        </div>
+
+        <!-- AI Dialogue Area -->
+        <div class="dialogue-arena">
+          <div class="prompt-bubble">
+            <div class="ai-avatar">🤖</div>
+            <div class="prompt-content">
+              <div class="prompt-text">
+                <span id="prompt-target-text">Si llueve mañana, ¿qué vas a hacer?</span>
+                <button class="btn-audio" onclick="playCurrentPrompt()" title="聆聽發音">🔊</button>
+              </div>
+              <div id="prompt-native-text" class="prompt-trans">如果明天下雨，你打算做什麼？</div>
             </div>
           </div>
         </div>
-        
-        <div id="mission-goal-text" class="mission-goal">
-          任務：回答當明天下雨時，你的應對行動（練習條件句表達）。
+
+        <!-- Interactive Answer Assembly Zone -->
+        <div class="answer-zone">
+          
+          <!-- Answer Construction Box (Click chips to put in, click to remove) -->
+          <div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.4rem; display:flex; justify-content:space-between;">
+              <span>✍️ 點擊下方單詞積木拼出句子（或直接打字）：</span>
+              <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.72rem;" onclick="clearAssembledWords()">↺ 清空</button>
+            </div>
+            
+            <div id="construction-slots" class="construction-slots" onclick="focusInputFallback()">
+              <div id="assembled-chips-container" style="display:flex; flex-wrap:wrap; gap:0.4rem;"></div>
+              <input type="text" id="input-fallback" class="input-fallback" placeholder="點擊積木或在此輸入..." onkeypress="handleKeyPress(event)" />
+            </div>
+          </div>
+
+          <!-- Word Pool Palette -->
+          <div class="palette-area">
+            <div class="palette-title">
+              <span>🧱 單詞積木 (點擊加入)：</span>
+              <span id="formula-hint" style="color:var(--accent-green); font-family:monospace; font-weight:600;">[Si 如果] + [llueve 下雨]</span>
+            </div>
+            <div id="word-pool" class="word-pool">
+              <!-- Dynamically populated chips -->
+            </div>
+          </div>
+
+          <!-- Quick Full Sentence Choices -->
+          <div id="quick-choices-area" style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.4rem;">
+            <div style="font-size: 0.75rem; color: var(--text-muted);">💬 參考回答選項：</div>
+            <div id="quick-choices" class="quick-choices"></div>
+          </div>
+
         </div>
-        
-        <div id="formula-container" class="formula-bar">
-          <span>📐 語句結構公式：</span>
-          <span id="mission-formula" class="formula-chip">[Si 如果] + [llueve 下雨], [no saldré / no voy 我不出門]</span>
+
+        <!-- Bottom Action Bar -->
+        <div class="action-bar">
+          <button class="nav-tab-btn" style="border: 1px solid var(--border-subtle);" onclick="loadNextTurn()">
+            跳過 / 下一題 ➔
+          </button>
+          <button id="btn-submit-answer" class="btn-primary-action" onclick="submitResponse()">
+            驗證送出 ➔
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Feedback Result Drawer -->
+      <div id="feedback-banner" class="feedback-banner">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:0.6rem;">
+            <span id="feedback-icon" style="font-size:1.4rem;">✅</span>
+            <div>
+              <div id="feedback-title" style="font-weight:700; font-size:1.05rem; color:#fff;">作答完美！</div>
+              <div id="feedback-detail" style="font-size:0.82rem; color:var(--text-sub);">反應速度: 1200ms · 語法準確: 100%</div>
+            </div>
+          </div>
+          <button class="btn-primary-action" style="padding:0.5rem 1.25rem; font-size:0.85rem;" onclick="loadNextTurn()">
+            繼續下一題 ➔
+          </button>
         </div>
       </div>
 
-      <div class="session-grid">
-        <div class="glass-card chat-container">
-          <div class="card-title">
-            <span>🤖 情境對話 (<span id="current-lang-display" style="color:var(--accent-cyan);">🇪🇸 西班牙語</span>)</span>
-            <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
-              <span id="difficulty-streak-tip" style="font-size: 0.75rem; color: #94a3b8;">連續正確: 0 次</span>
-              <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;" onclick="loadNextTurn()">Next Turn ➔</button>
-            </div>
-          </div>
-          
-          <div id="chat-messages" class="chat-messages"></div>
-
-          <!-- Beginner Interactive Scaffolding Panel -->
-          <div id="scaffolding-panel" class="scaffolding-box">
-            
-            <div id="quick-options-wrapper">
-              <div class="scaffolding-title">
-                <span>🧩 零基礎一鍵選句 (點擊直接填入)：</span>
-              </div>
-              <div id="quick-options-container" class="chips-container"></div>
-            </div>
-            
-            <div id="word-builder-wrapper" style="margin-top: 0.6rem;">
-              <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-                <span>🧱 單詞積木拼句 (點擊積木依序拼裝)：</span>
-                <button style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.7rem;" onclick="clearInput()">↺ 清空重拼</button>
-              </div>
-              <div id="word-chips-container" class="word-builder-box"></div>
-            </div>
-
-            <div id="advanced-notice" style="display: none; padding: 0.5rem; color: var(--accent-green); font-size: 0.8rem; text-align: center;">
-              🔥 已晉級至「⭐⭐⭐ 流利直覺模式」：請直接在下方輸入目標語言作答（或輸入母語意圖）！
-            </div>
-
-          </div>
-
-          <div class="chat-input-bar">
-            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入目標語言、母語意向 (如: 下雨就不出門)，或點選上方積木..." onkeypress="handleKeyPress(event)">
-            <button class="btn-secondary" onclick="clearInput()">清空</button>
-            <button class="btn-primary" onclick="submitResponse()">送出 ➔</button>
-          </div>
-        </div>
-
-        <div class="analytics-panel">
-          <div class="glass-card">
-            <div class="card-title">⚡ 評估回饋與自適應指標 (Performance)</div>
-            <div class="metric-grid">
-              <div class="metric-box">
-                <div class="metric-label">反應速度 (Latency)</div>
-                <div id="stat-latency" class="metric-val">-- ms</div>
-              </div>
-              <div class="metric-box">
-                <div class="metric-label">語法準確率 (Grammar)</div>
-                <div id="stat-grammar" class="metric-val">--%</div>
-              </div>
-              <div class="metric-box">
-                <div class="metric-label">語意匹配度 (Semantic)</div>
-                <div id="stat-semantic" class="metric-val">--%</div>
-              </div>
-              <div class="metric-box">
-                <div class="metric-label">自然度 (Naturalness)</div>
-                <div id="stat-natural" class="metric-val">--%</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass-card">
-            <div class="card-title">🔍 Universal IR 意圖樹 (Language-Agnostic)</div>
-            <pre id="ir-tree-display" class="ir-tree-viewer">// Universal Communication IR 意圖解析...</pre>
-          </div>
-        </div>
-      </div>
     </section>
 
-    <!-- 2. Personal Notebook & Vocabulary Bank Tab -->
-    <section id="notebook-tab" class="tab-pane">
-      <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 1.25rem;">
+    <!-- 2. PERSONAL NOTEBOOK VIEW -->
+    <section id="notebook-view" class="view-pane">
+      <div class="card-grid-2">
         
         <!-- Vocabulary Bank -->
-        <div class="glass-card">
-          <div class="card-title" style="justify-content: space-between;">
-            <span>🗂️ 個人專屬單字庫 (<span id="notebook-vocab-count">0</span> 個已掌握詞彙)</span>
-            <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" onclick="loadNotebook()">🔄 重新載入</button>
+        <div class="glass-box">
+          <div class="box-title">
+            <span>🗂️ 核心掌握單字庫 (<span id="notebook-vocab-count">0</span>)</span>
           </div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-            根據你的作答自動提煉並追蹤單字熟練度，點擊單字可隨時播放發音：
+          <p style="font-size:0.8rem; color:var(--text-sub); margin-bottom:0.75rem;">
+            從每次對話自動提煉收錄，點擊即可聽朗讀：
           </p>
-          <div id="vocab-bank-container" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 520px; overflow-y: auto; padding-right: 0.3rem;">
-            <!-- Dynamically populated vocabulary items -->
-          </div>
+          <div id="vocab-bank-container" style="max-height:480px; overflow-y:auto; padding-right:0.3rem;"></div>
         </div>
 
-        <!-- Practiced Sentences & Review -->
-        <div class="glass-card">
-          <div class="card-title" style="justify-content: space-between;">
-            <span>📝 歷史練習句子複習 (<span id="notebook-sentence-count">0</span> 句)</span>
+        <!-- Practiced History -->
+        <div class="glass-box">
+          <div class="box-title">
+            <span>📝 歷史對話複習 (<span id="notebook-sentence-count">0</span>)</span>
           </div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-            檢視歷史練習對話、母語對照、反應速度與 IR 結構，可點擊「複習」再次練習：
+          <p style="font-size:0.8rem; color:var(--text-sub); margin-bottom:0.75rem;">
+            檢視歷史練習問答與母語對照：
           </p>
-          <div id="sentence-history-container" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 520px; overflow-y: auto; padding-right: 0.3rem;">
-            <!-- Dynamically populated sentence history -->
-          </div>
+          <div id="sentence-history-container" style="max-height:480px; overflow-y:auto; padding-right:0.3rem;"></div>
         </div>
 
       </div>
     </section>
 
-    <!-- 3. IR Sandbox Tab -->
-    <section id="ir-sandbox-tab" class="tab-pane">
-      <div class="glass-card">
-        <div class="card-title">⚡ 雙向 IR 轉換沙盒 (Language A ↔ Universal IR ↔ Language B)</div>
-        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-          多語言零洩漏驗證：無論輸入日語、西班牙語或英語，均即時映射至同一 Universal IR，再轉譯至其他自然語言。
+    <!-- 3. IR ENGINE & ANALYTICS VIEW -->
+    <section id="engine-view" class="view-pane">
+      
+      <!-- IR Transformation Sandbox -->
+      <div class="glass-box" style="margin-bottom:1.5rem;">
+        <div class="box-title">⚡ 雙向 IR 轉換沙盒 (Language A ↔ Universal IR ↔ Language B)</div>
+        <p style="font-size:0.85rem; color:var(--text-sub); margin-bottom:1rem;">
+          零洩漏語言無關表示：西班牙語、日語、英語均映射為同一份 Pydantic Communication IR。
         </p>
-        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-          <input type="text" id="sandbox-input" class="chat-input" value="Si llueve mañana, no saldré." placeholder="輸入日語、西班牙語或英語...">
-          <button class="btn-primary" onclick="testIRTransform()">Transform ➔</button>
+        <div style="display:flex; gap:0.75rem; margin-bottom:1rem;">
+          <input type="text" id="sandbox-input" style="flex:1; background:#0c101b; border:1px solid var(--border-subtle); color:#fff; padding:0.65rem 1rem; border-radius:var(--radius-sm);" value="Si llueve mañana, no saldré." />
+          <button class="btn-primary-action" style="padding:0.65rem 1.25rem;" onclick="testIRTransform()">轉換 ➔</button>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-          <div class="metric-box">
-            <div class="metric-label">🇪🇸 西班牙語 (Spanish)</div>
-            <div id="sandbox-es" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+          <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px;">
+            <div style="font-size:0.72rem; color:var(--text-muted);">🇪🇸 西班牙語</div>
+            <div id="sandbox-es" style="font-size:0.92rem; font-weight:700; color:#fff; margin-top:0.2rem;">--</div>
           </div>
-          <div class="metric-box">
-            <div class="metric-label">🇯🇵 日語 (Japanese)</div>
-            <div id="sandbox-ja" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
+          <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px;">
+            <div style="font-size:0.72rem; color:var(--text-muted);">🇯🇵 日語</div>
+            <div id="sandbox-ja" style="font-size:0.92rem; font-weight:700; color:#fff; margin-top:0.2rem;">--</div>
           </div>
-          <div class="metric-box">
-            <div class="metric-label">🇬🇧 英語 (English)</div>
-            <div id="sandbox-en" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
+          <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px;">
+            <div style="font-size:0.72rem; color:var(--text-muted);">🇬🇧 英語</div>
+            <div id="sandbox-en" style="font-size:0.92rem; font-weight:700; color:#fff; margin-top:0.2rem;">--</div>
           </div>
         </div>
-        <div style="margin-top: 1rem;">
-          <div class="metric-label" style="margin-bottom: 0.5rem;">Universal Communication IR (Pydantic / JSON)</div>
-          <pre id="sandbox-ir" class="ir-tree-viewer" style="max-height: 260px;">// Transformed IR JSON output...</pre>
-        </div>
+        <pre id="sandbox-ir" style="background:#060911; border:1px solid var(--border-subtle); padding:0.75rem; border-radius:6px; color:#38bdf8; font-family:monospace; font-size:0.78rem; max-height:220px; overflow-y:auto;"></pre>
       </div>
-    </section>
 
-    <!-- 4. Skill Graph Tab -->
-    <section id="skills-tab" class="tab-pane">
-      <div class="glass-card">
-        <div class="card-title">🧬 20 Universal Skills & Multilingual Mappings (JA & ES)</div>
-        <div id="skills-container" class="skills-grid"></div>
-      </div>
-    </section>
-
-    <!-- 5. Mastery & Analytics Tab -->
-    <section id="analytics-tab" class="tab-pane">
-      <div class="glass-card">
-        <div class="card-title">📊 多維度能力掌握雷達 (Multidimensional Mastery)</div>
-        <div class="radar-grid">
-          <div class="progress-card">
-            <div class="metric-label">整體熟練度 (Overall)</div>
-            <div id="rad-overall" class="progress-val">0%</div>
-            <div class="progress-bar-container"><div id="bar-overall" class="progress-bar-fill" style="width: 0%"></div></div>
-          </div>
-          <div class="progress-card">
-            <div class="metric-label">產出能力 (Production)</div>
-            <div id="rad-prod" class="progress-val">0%</div>
-            <div class="progress-bar-container"><div id="bar-prod" class="progress-bar-fill" style="width: 0%"></div></div>
-          </div>
-          <div class="progress-card">
-            <div class="metric-label">識別理解 (Recognition)</div>
-            <div id="rad-rec" class="progress-val">0%</div>
-            <div class="progress-bar-container"><div id="bar-rec" class="progress-bar-fill" style="width: 0%"></div></div>
-          </div>
-          <div class="progress-card">
-            <div class="metric-label">自動化速度 (Automaticity)</div>
-            <div id="rad-auto" class="progress-val">0%</div>
-            <div class="progress-bar-container"><div id="bar-auto" class="progress-bar-fill" style="width: 0%"></div></div>
-          </div>
-          <div class="progress-card">
-            <div class="metric-label">記憶保持率 (Retention)</div>
-            <div id="rad-ret" class="progress-val">0%</div>
-            <div class="progress-bar-container"><div id="bar-ret" class="progress-bar-fill" style="width: 0%"></div></div>
+      <!-- Radar Mastery & Skills -->
+      <div class="card-grid-2">
+        <div class="glass-box">
+          <div class="box-title">📊 多維度能力掌握雷達 (Mastery)</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-top:0.5rem;">
+            <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px; text-align:center;">
+              <div style="font-size:0.72rem; color:var(--text-muted);">整體熟練度</div>
+              <div id="rad-overall" style="font-size:1.5rem; font-weight:800; color:var(--accent-cyan);">0%</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px; text-align:center;">
+              <div style="font-size:0.72rem; color:var(--text-muted);">產出能力</div>
+              <div id="rad-prod" style="font-size:1.5rem; font-weight:800; color:var(--accent-green);">0%</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px; text-align:center;">
+              <div style="font-size:0.72rem; color:var(--text-muted);">識別理解</div>
+              <div id="rad-rec" style="font-size:1.5rem; font-weight:800; color:var(--accent-blue);">0%</div>
+            </div>
+            <div style="background:rgba(0,0,0,0.3); padding:0.75rem; border-radius:6px; text-align:center;">
+              <div style="font-size:0.72rem; color:var(--text-muted);">反應速度</div>
+              <div id="rad-auto" style="font-size:1.5rem; font-weight:800; color:var(--accent-amber);">0%</div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- 6. Simulation Runner Tab -->
-    <section id="sim-tab" class="tab-pane">
-      <div class="glass-card">
-        <div class="card-title">🚀 自適應難度與間隔學習模擬驗證 (Spaced & Adaptive Simulation)</div>
-        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-          執行批次回合模擬，驗證隨著正確率提升，難度自適應從 Level 1 (入門) ➔ Level 2 (進階) ➔ Level 3 (流利) 動態調整。
-        </p>
-        <button class="btn-primary" onclick="runSim(10)">執行 10 回合自適應難度模擬 ➔</button>
-        <div style="margin-top: 1.25rem;">
-          <pre id="sim-output" class="ir-tree-viewer" style="max-height: 350px;">// Simulation logs will appear here...</pre>
+        <div class="glass-box">
+          <div class="box-title">🚀 批次模擬 (Simulation)</div>
+          <p style="font-size:0.8rem; color:var(--text-sub); margin-bottom:0.75rem;">
+            驗證 H1-H6 假設與間隔學習曲線：
+          </p>
+          <button class="btn-primary-action" style="padding:0.5rem 1rem; font-size:0.85rem;" onclick="runSim(10)">執行 10 回合自適應模擬</button>
+          <pre id="sim-output" style="background:#060911; border:1px solid var(--border-subtle); padding:0.6rem; border-radius:6px; color:#38bdf8; font-family:monospace; font-size:0.75rem; max-height:180px; overflow-y:auto; margin-top:0.75rem;">// 模擬日誌將顯示於此...</pre>
         </div>
       </div>
+
     </section>
 
   </main>
-
-  <!-- Interactive Tutorial Modal -->
-  <div id="tutorial-modal" class="modal-backdrop">
-    <div class="modal-box">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-        <h2 style="font-size: 1.25rem; font-weight: 700; color: #fff;">🎓 零基礎 3 步驟上手 ACAS</h2>
-        <button onclick="closeTutorialModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
-      </div>
-
-      <div class="modal-step">
-        <div class="step-num">1</div>
-        <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">登入官網帳號並查看任務公式</div>
-          <div style="font-size:0.85rem; color:#94a3b8;">
-            登入 Google / LINE / GitHub 帳號即可跨裝置同步個人學習紀錄、單字庫與遺忘曲線！
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-step">
-        <div class="step-num">2</div>
-        <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">使用「一鍵選句」或「單詞積木」</div>
-          <div style="font-size:0.85rem; color:#94a3b8;">
-            完全不會打字時，點擊下方「💬 推薦回答」直接填入，或依序點選「+ 單詞積木」拼裝句子，就像玩樂高一樣！
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-step">
-        <div class="step-num">3</div>
-        <div>
-          <div style="font-weight:700; color:#fff; margin-bottom:0.25rem;">隨時在「個人紀錄與單字庫」複習</div>
-          <div style="font-size:0.85rem; color:#94a3b8;">
-            每一回合練習過的單字與句子都會自動收錄在專屬單字庫，點擊發音與複習，鞏固長效記憶！
-          </div>
-        </div>
-      </div>
-
-      <div style="text-align: right; margin-top: 1.5rem;">
-        <button class="btn-primary" style="display:inline-flex;" onclick="closeTutorialModal()">開始體驗 ➔</button>
-      </div>
-    </div>
-  </div>
 
   <script src="app.js"></script>
 </body>
