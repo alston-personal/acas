@@ -19,6 +19,7 @@ from core.validator import IRValidator
 from core.ir_schema import CommunicationIR
 from languages.ja.adapter import JapaneseAdapter
 from languages.en.adapter import EnglishAdapter
+from languages.es.adapter import SpanishAdapter
 
 app = FastAPI(title="ACAS Universal Communication IR Learning System", version="0.1")
 
@@ -30,43 +31,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Shared in-memory engine for demo
 engines: Dict[str, ACASSessionEngine] = {}
 ja_adapter = JapaneseAdapter()
 en_adapter = EnglishAdapter()
+es_adapter = SpanishAdapter()
 
 
-def get_engine(learner_id: str = "web_user") -> ACASSessionEngine:
-    if learner_id not in engines:
-        engines[learner_id] = ACASSessionEngine(learner_id=learner_id)
-    return engines[learner_id]
+def get_engine(learner_id: str = "web_user", target_language: str = "ja") -> ACASSessionEngine:
+    key = f"{learner_id}_{target_language}"
+    if key not in engines:
+        engine = ACASSessionEngine(learner_id=learner_id)
+        engine.goal.language = target_language
+        engine.profile.target_language = target_language
+        if target_language == "es":
+            engine.analyzer.adapter = es_adapter
+        elif target_language == "en":
+            engine.analyzer.adapter = en_adapter
+        else:
+            engine.analyzer.adapter = ja_adapter
+        engines[key] = engine
+    return engines[key]
 
 
 class NextTurnRequest(BaseModel):
     learner_id: str = "web_user"
+    target_language: str = "ja"
     domain: Optional[str] = None
 
 
 class SubmitResponseRequest(BaseModel):
     learner_id: str = "web_user"
+    target_language: str = "ja"
     response_text: str
     latency_ms: float
 
 
 class IRTransformRequest(BaseModel):
-    source_language: str  # "ja", "en", "ir"
+    source_language: str  # "ja", "en", "es", "ir"
     text_or_json: str
-    target_language: str  # "ja", "en", "ir"
+    target_language: str  # "ja", "en", "es", "ir"
 
 
 class SimulationRequest(BaseModel):
     learner_id: str = "sim_user"
+    target_language: str = "ja"
     turns: int = 15
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "version": "0.1", "system": "ACAS Universal Communication IR"}
+    return {"status": "online", "version": "0.1", "system": "ACAS Universal Communication IR", "supported_languages": ["ja", "es", "en"]}
 
 
 @app.get("/api/skills")
@@ -80,8 +94,8 @@ def get_skills():
 
 
 @app.get("/api/progress/{learner_id}")
-def get_progress(learner_id: str):
-    engine = get_engine(learner_id)
+def get_progress(learner_id: str, target_language: str = "ja"):
+    engine = get_engine(learner_id, target_language=target_language)
     prog = engine.compute_progress()
     
     skill_states = {}
@@ -98,6 +112,7 @@ def get_progress(learner_id: str):
 
     return {
         "goal_id": prog.goal_id,
+        "target_language": target_language,
         "overall": prog.overall,
         "dimensions": prog.dimensions.model_dump(),
         "mastered_skills_count": prog.mastered_skills_count,
@@ -109,14 +124,31 @@ def get_progress(learner_id: str):
 
 @app.post("/api/session/next-turn")
 def next_turn(req: NextTurnRequest):
-    engine = get_engine(req.learner_id)
+    engine = get_engine(req.learner_id, target_language=req.target_language)
     prompt = engine.start_next_turn(domain=req.domain)
     cluster = engine.current_cluster
+    
+    # Adapt prompt text based on target language
+    if req.target_language == "es":
+        # Spanish prompts
+        es_prompts = {
+            "daily.weather.plan": ("Si llueve mañana, ¿qué vas a hacer?", "¿Qué quieres hacer si llueve mañana?"),
+            "travel.restaurant.order": ("¡Bienvenido! ¿Qué desea pedir?", "¿Qué desea tomar?"),
+            "travel.hotel.checkin": ("Buenas tardes. ¿Tiene una reserva?", "¿Puede decirme su nombre?"),
+            "daily.opinion.chat": ("¿Ha estado en Japón alguna vez?", "¿Qué piensa del ramen?"),
+            "travel.direction.ask": ("Disculpe, ¿dónde está la estación?", "¿Cómo puedo llegar allí?"),
+        }
+        p_text, _ = es_prompts.get(prompt.scenario_id, ("Si llueve mañana, ¿qué vas a hacer?", "Welcome"))
+        display_prompt = p_text
+    else:
+        display_prompt = prompt.prompt_text_ja
+
     return {
         "turn_count": engine.session_turn_count,
         "scenario_id": prompt.scenario_id,
         "domain": prompt.domain,
-        "prompt_ja": prompt.prompt_text_ja,
+        "target_language": req.target_language,
+        "prompt_target_lang": display_prompt,
         "prompt_en": prompt.prompt_text_en,
         "target_skills": prompt.target_skills,
         "hints": prompt.hints,
@@ -126,7 +158,7 @@ def next_turn(req: NextTurnRequest):
 
 @app.post("/api/session/submit")
 def submit_response(req: SubmitResponseRequest):
-    engine = get_engine(req.learner_id)
+    engine = get_engine(req.learner_id, target_language=req.target_language)
     if not engine.current_prompt:
         raise HTTPException(status_code=400, detail="No active prompt. Request /api/session/next-turn first.")
 
@@ -149,12 +181,14 @@ def submit_response(req: SubmitResponseRequest):
 
 @app.post("/api/transform")
 def transform_ir(req: IRTransformRequest):
-    """Bidirectional transformation between JA ↔ IR ↔ EN."""
+    """Bidirectional transformation between JA ↔ ES ↔ EN ↔ IR."""
     try:
         if req.source_language == "ja":
             ir = ja_adapter.parse(req.text_or_json)
         elif req.source_language == "en":
             ir = en_adapter.parse(req.text_or_json)
+        elif req.source_language == "es":
+            ir = es_adapter.parse(req.text_or_json)
         elif req.source_language == "ir":
             import json
             data = json.loads(req.text_or_json)
@@ -166,6 +200,7 @@ def transform_ir(req: IRTransformRequest):
         
         ja_out = ja_adapter.realize(ir)
         en_out = en_adapter.realize(ir)
+        es_out = es_adapter.realize(ir)
 
         return {
             "valid": valid,
@@ -173,6 +208,7 @@ def transform_ir(req: IRTransformRequest):
             "ir": ir.model_dump(),
             "japanese": ja_out,
             "english": en_out,
+            "spanish": es_out,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -180,17 +216,26 @@ def transform_ir(req: IRTransformRequest):
 
 @app.post("/api/simulation/run")
 def run_simulation(req: SimulationRequest):
-    engine = get_engine(req.learner_id)
+    engine = get_engine(req.learner_id, target_language=req.target_language)
     
-    simulated_responses = [
-        ("明日雨が降ったら、東京に行きません。", 1350.0),
-        ("ラーメンを食べたいです。", 1050.0),
-        ("お水をください。", 800.0),
-        ("日本に行ったことがあります。", 1500.0),
-        ("美味しいと思います。", 1150.0),
-        ("東京に住みたいです。", 1250.0),
-        ("メニューをください。", 750.0),
-    ]
+    if req.target_language == "es":
+        simulated_responses = [
+            ("Si llueve mañana, no saldré.", 1300.0),
+            ("Quiero comer ramen.", 1000.0),
+            ("Un vaso de agua, por favor.", 750.0),
+            ("He estado en Japón.", 1450.0),
+            ("Creo que es muy delicioso.", 1100.0),
+            ("Quiero vivir en Tokio.", 1200.0),
+        ]
+    else:
+        simulated_responses = [
+            ("明日雨が降ったら、東京に行きません。", 1350.0),
+            ("ラーメンを食べたいです。", 1050.0),
+            ("お水をください。", 800.0),
+            ("日本に行ったことがあります。", 1500.0),
+            ("美味しいと思います。", 1150.0),
+            ("東京に住みたいです。", 1250.0),
+        ]
 
     history = []
     for i in range(req.turns):
@@ -212,6 +257,7 @@ def run_simulation(req: SimulationRequest):
 
     return {
         "learner_id": req.learner_id,
+        "target_language": req.target_language,
         "turns_completed": len(history),
         "history": history,
         "final_progress": engine.compute_progress().model_dump(),

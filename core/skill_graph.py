@@ -1,8 +1,7 @@
 """
 Skill Graph and Skill Definition
 
-Defines Universal Skills (e.g. CORE.CONDITION) vs Language-specific Skills (e.g. JP.CONDITION.TARA)
-per Section 12 & 32.
+Defines Universal Skills (e.g. CORE.CONDITION) vs Language-specific Skills (e.g. JP.CONDITION.TARA, ES.CONDITION.SI)
 """
 
 from __future__ import annotations
@@ -11,9 +10,9 @@ from pydantic import BaseModel, Field
 
 
 class UniversalSkill(BaseModel):
-    skill_id: str  # e.g. "CORE.CONDITION"
+    skill_id: str
     type: str = "universal"
-    concept: str  # e.g. "CONDITION"
+    concept: str
     description: str
     dependencies: List[str] = Field(default_factory=list)
     communication_utility: float = Field(default=0.8, ge=0.0, le=1.0)
@@ -22,12 +21,12 @@ class UniversalSkill(BaseModel):
 
 
 class LanguageSkill(BaseModel):
-    skill_id: str  # e.g. "JP.CONDITION.TARA"
-    language: str  # "ja", "en", "zh"
-    concept: str  # "CONDITION"
-    realization: str  # "～たら"
+    skill_id: str
+    language: str  # "ja", "en", "es", "zh"
+    concept: str
+    realization: str
     description: str
-    dependencies: List[str] = Field(default_factory=list)  # e.g. ["CORE.CONDITION"]
+    dependencies: List[str] = Field(default_factory=list)
     frequency: float = Field(default=0.8, ge=0.0, le=1.0)
     difficulty: float = Field(default=0.4, ge=0.0, le=1.0)
     communication_utility: float = Field(default=0.8, ge=0.0, le=1.0)
@@ -60,7 +59,6 @@ class SkillGraph:
         ]
 
     def _init_mvp_skills(self):
-        # 20 Universal Skills from Section 32
         mvp_universal = [
             UniversalSkill(skill_id="CORE.INFORM", concept="INFORM", description="Provide factual information", dependencies=[], communication_utility=0.98, composition_value=0.9, unlock_value=0.9),
             UniversalSkill(skill_id="CORE.ASK", concept="ASK", description="Ask a question or elicit info", dependencies=["CORE.INFORM"], communication_utility=0.98, composition_value=0.9, unlock_value=0.95),
@@ -86,7 +84,7 @@ class SkillGraph:
         for us in mvp_universal:
             self.register_universal(us)
 
-        # Japanese Mappings (Section 12, 14, 40)
+        # Japanese Skills
         ja_skills = [
             LanguageSkill(skill_id="JP.INFORM.DESU", language="ja", concept="INFORM", realization="～です / ～ます", description="Standard polite assertion", dependencies=["CORE.INFORM"], frequency=0.99, difficulty=0.1, communication_utility=0.99),
             LanguageSkill(skill_id="JP.ASK.KA", language="ja", concept="ASK", realization="～か", description="Question particle", dependencies=["CORE.ASK"], frequency=0.98, difficulty=0.1, communication_utility=0.98),
@@ -105,6 +103,21 @@ class SkillGraph:
         ]
         for js in ja_skills:
             self.register_language(js)
+
+        # Spanish Skills (ES)
+        es_skills = [
+            LanguageSkill(skill_id="ES.INFORM.PRESENTE", language="es", concept="INFORM", realization="Presente Indicativo", description="Direct statement in Spanish", dependencies=["CORE.INFORM"], frequency=0.99, difficulty=0.15, communication_utility=0.99),
+            LanguageSkill(skill_id="ES.ASK.INTERROGATIVE", language="es", concept="ASK", realization="¿...? / Preguntas", description="Questions in Spanish", dependencies=["CORE.ASK"], frequency=0.98, difficulty=0.1, communication_utility=0.98),
+            LanguageSkill(skill_id="ES.NEGATION.NO", language="es", concept="NEGATION", realization="No + [verbo]", description="Negative verbs and statements", dependencies=["CORE.NEGATION"], frequency=0.98, difficulty=0.1, communication_utility=0.98),
+            LanguageSkill(skill_id="ES.REQUEST.PORFAVOR", language="es", concept="REQUEST", realization="Por favor / ¿Puede...?", description="Polite requests", dependencies=["CORE.REQUEST"], frequency=0.95, difficulty=0.2, communication_utility=0.96),
+            LanguageSkill(skill_id="ES.DESIRE.QUIERO", language="es", concept="DESIRE", realization="Quiero + [infinitivo]", description="Expressing desire / wish", dependencies=["CORE.DESIRE"], frequency=0.94, difficulty=0.2, communication_utility=0.95),
+            LanguageSkill(skill_id="ES.CAUSE.PORQUE", language="es", concept="CAUSE", realization="Porque + [oración]", description="Expressing causality and reason", dependencies=["CORE.CAUSE"], frequency=0.90, difficulty=0.25, communication_utility=0.92),
+            LanguageSkill(skill_id="ES.CONDITION.SI", language="es", concept="CONDITION", realization="Si + [presente], [futuro/presente]", description="Real & hypothetical conditions", dependencies=["CORE.CONDITION"], frequency=0.92, difficulty=0.35, communication_utility=0.94),
+            LanguageSkill(skill_id="ES.EXPERIENCE.HABER", language="es", concept="EXPERIENCE", realization="He + [participio] (Pretérito Perfecto)", description="Past life experiences", dependencies=["CORE.EXPERIENCE"], frequency=0.88, difficulty=0.4, communication_utility=0.90),
+            LanguageSkill(skill_id="ES.OPINION.CREO", language="es", concept="OPINION", realization="Creo que... / Pienso que...", description="Personal opinions", dependencies=["CORE.OPINION"], frequency=0.90, difficulty=0.25, communication_utility=0.90),
+        ]
+        for es in es_skills:
+            self.register_language(es)
 
 
 global_skill_graph = SkillGraph()

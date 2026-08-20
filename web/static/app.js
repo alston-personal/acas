@@ -1,15 +1,26 @@
 // ACAS Web Client Logic
 let turnStartTime = Date.now();
 let currentLearnerId = "web_user";
+let targetLanguage = "ja";
 let isBeginnerMode = true;
 let currentPromptData = null;
 
-// Base API URL prefix support (supports both '/' and '/acas/' reverse proxy)
 const API_BASE = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
 
 function apiUrl(path) {
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return API_BASE + cleanPath;
+}
+
+function changeTargetLanguage(lang) {
+  targetLanguage = lang;
+  const labelMap = { ja: "🇯🇵 日語", es: "🇪🇸 西班牙語", en: "🇬🇧 英語" };
+  document.getElementById('current-lang-display').innerText = labelMap[lang] || lang;
+  
+  // Clear chat and reload turn for new language
+  document.getElementById('chat-messages').innerHTML = '';
+  loadNextTurn();
+  loadProgress();
 }
 
 function switchTab(tabId) {
@@ -28,69 +39,74 @@ function toggleBeginnerMode() {
   document.getElementById('scaffolding-panel').style.display = isBeginnerMode ? 'block' : 'none';
 }
 
-function speakText(text, lang = 'ja-JP') {
+function speakText(text, lang) {
   if ('speechSynthesis' in window) {
+    const langCode = lang || (targetLanguage === 'es' ? 'es-ES' : (targetLanguage === 'en' ? 'en-US' : 'ja-JP'));
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang;
+    utterance.lang = langCode;
     utterance.rate = 0.9;
     window.speechSynthesis.speak(utterance);
   }
 }
 
-// Scaffolding database for scenarios
-const SCAFFOLDING_DB = {
+// Scaffolding database for JA & ES
+const SCAFFOLDING_JA = {
   "明日雨が降ったら": {
     options: [
-      { ja: "明日雨が降ったら、行きません。", zh: "如果明天下雨，我就不去。", autoSend: false },
-      { ja: "明日雨が降ったら、家で休みます。", zh: "如果明天下雨，就在家休息。", autoSend: false },
-      { ja: "雨だったら、出かけない。", zh: "如果下雨就不出門 (常體)。", autoSend: false }
+      { text: "明日雨が降ったら、行きません。", zh: "如果明天下雨，我就不去。" },
+      { text: "明日雨が降ったら、家で休みます。", zh: "如果明天下雨，就在家休息。" },
+      { text: "雨だったら、出かけない。", zh: "如果下雨就不出門 (常體)。" }
     ],
     words: ["明日", "雨が降ったら", "東京に", "行きません", "出かけない", "家で", "休みます", "映画を", "見ます"]
   },
   "住むなら": {
     options: [
-      { ja: "東京に住みたいです。", zh: "我想住在東京。", autoSend: false },
-      { ja: "京都に住みたいです。", zh: "我想住在京都。", autoSend: false },
-      { ja: "日本に住むなら、東京がいいです。", zh: "如果住日本，東京挺好的。", autoSend: false }
+      { text: "東京に住みたいです。", zh: "我想住在東京。" },
+      { text: "京都に住みたいです。", zh: "我想住在京都。" },
+      { text: "日本に住むなら、東京がいいです。", zh: "如果住日本，東京挺好的。" }
     ],
     words: ["東京に", "京都に", "日本に", "住みたいです", "住みたい", "がいいです", "行きたいです"]
   },
   "注文": {
     options: [
-      { ja: "ラーメンをください。", zh: "請給我一碗拉麵。", autoSend: false },
-      { ja: "ラーメンが食べたいです。", zh: "我想吃拉麵。", autoSend: false },
-      { ja: "メニューを見せてください。", zh: "請讓我看一下菜單。", autoSend: false }
+      { text: "ラーメンをください。", zh: "請給我一碗拉麵。" },
+      { text: "ラーメンが食べたいです。", zh: "我想吃拉麵。" },
+      { text: "メニューを見せてください。", zh: "請讓我看一下菜單。" }
     ],
     words: ["ラーメンを", "お水を", "メニューを", "ください", "お願いします", "食べたいです", "飲みたいです"]
-  },
-  "お飲み物": {
+  }
+};
+
+const SCAFFOLDING_ES = {
+  "llueve": {
     options: [
-      { ja: "お水をください。", zh: "請給我一杯水。", autoSend: false },
-      { ja: "お茶をお願いします。", zh: "麻煩給我一杯茶。", autoSend: false },
-      { ja: "結構です。", zh: "不用了，謝謝。", autoSend: false }
+      { text: "Si llueve mañana, no saldré.", zh: "如果明天下雨，我就不出門。" },
+      { text: "Si llueve, me quedo en casa.", zh: "如果下雨，我就待在家。" },
+      { text: "No voy si llueve.", zh: "如果下雨我不會去。" }
     ],
-    words: ["お水を", "お茶を", "ビールを", "ください", "お願いします", "結構です"]
+    words: ["Si", "llueve", "mañana,", "no", "saldré", "voy", "me", "quedo", "en casa", "a Tokio"]
   },
-  "行ったことがありますか": {
+  "pedir": {
     options: [
-      { ja: "はい、日本に行ったことがあります。", zh: "有，我曾經去過日本。", autoSend: false },
-      { ja: "いいえ、行ったことがありません。", zh: "沒有，我還沒去過。", autoSend: false }
+      { text: "Quiero comer ramen.", zh: "我想吃拉麵。" },
+      { text: "Un vaso de agua, por favor.", zh: "請給我一杯水。" },
+      { text: "El menú, por favor.", zh: "請給我菜單。" }
     ],
-    words: ["はい、", "いいえ、", "日本に", "東京に", "行ったことがあります", "行ったことがありません"]
+    words: ["Quiero", "comer", "ramen", "Un vaso de agua,", "El menú,", "por favor", "tomar"]
   },
-  "どう思いますか": {
+  "reserva": {
     options: [
-      { ja: "とても美味しいと思います。", zh: "我覺得非常美味。", autoSend: false },
-      { ja: "面白いと思います。", zh: "我覺得很有趣。", autoSend: false }
+      { text: "Tengo una reserva a nombre de Tanaka.", zh: "我有一筆以 Tanaka 名義的預約。" },
+      { text: "Sí, tengo una reserva.", zh: "是的，我有預約。" }
     ],
-    words: ["とても", "美味しいと", "面白いと", "思います", "思わない", "綺麗だと"]
+    words: ["Tengo", "una", "reserva", "a nombre de", "Sí,", "muchas gracias"]
   },
-  "駅はどこですか": {
+  "japón": {
     options: [
-      { ja: "駅はあそこです。", zh: "車站在那邊。", autoSend: false },
-      { ja: "まっすぐ行ってください。", zh: "請一直往前走。", autoSend: false }
+      { text: "Sí, he estado en Japón.", zh: "有，我曾經去過日本。" },
+      { text: "No, nunca he estado allí.", zh: "沒有，我從未去過那裡。" }
     ],
-    words: ["駅は", "あそこです", "あちらです", "まっすぐ", "行ってください", "右です", "左です"]
+    words: ["Sí,", "No,", "he estado", "en Japón", "en Tokio", "nunca", "me gusta"]
   }
 };
 
@@ -100,39 +116,49 @@ function renderScaffolding(promptText) {
   optContainer.innerHTML = '';
   wordContainer.innerHTML = '';
 
+  const db = targetLanguage === 'es' ? SCAFFOLDING_ES : SCAFFOLDING_JA;
   let matched = null;
-  for (let key in SCAFFOLDING_DB) {
-    if (promptText.includes(key)) {
-      matched = SCAFFOLDING_DB[key];
+
+  for (let key in db) {
+    if (promptText.toLowerCase().includes(key.toLowerCase())) {
+      matched = db[key];
       break;
     }
   }
 
-  // Default fallback scaffolding
   if (!matched) {
-    matched = {
-      options: [
-        { ja: "はい、そうです。", zh: "是的，沒錯。", autoSend: false },
-        { ja: "いいえ、違います。", zh: "不，不是的。", autoSend: false },
-        { ja: "手伝ってください。", zh: "請幫我一下。", autoSend: false }
-      ],
-      words: ["はい", "いいえ", "お願いします", "ください", "です", "ます", "行きます", "食べます"]
-    };
+    if (targetLanguage === 'es') {
+      matched = {
+        options: [
+          { text: "Sí, por favor.", zh: "好的，請。" },
+          { text: "No, gracias.", zh: "不用了，謝謝。" },
+          { text: "¿Puede ayudarme?", zh: "能幫我一下嗎？" }
+        ],
+        words: ["Sí", "No", "por favor", "gracias", "quiero", "ayuda", "dónde está"]
+      };
+    } else {
+      matched = {
+        options: [
+          { text: "はい、そうです。", zh: "是的，沒錯。" },
+          { text: "いいえ、違います。", zh: "不，不是的。" },
+          { text: "手伝ってください。", zh: "請幫我一下。" }
+        ],
+        words: ["はい", "いいえ", "お願いします", "ください", "です", "ます", "行きます", "食べます"]
+      };
+    }
   }
 
-  // Render Option Chips
   matched.options.forEach(opt => {
     const btn = document.createElement('button');
     btn.className = 'chip-btn';
-    btn.innerHTML = `<span>💬 ${opt.ja}</span><span class="subtext">(${opt.zh})</span>`;
+    btn.innerHTML = `<span>💬 ${opt.text}</span><span class="subtext">(${opt.zh})</span>`;
     btn.onclick = () => {
-      document.getElementById('user-input').value = opt.ja;
+      document.getElementById('user-input').value = opt.text;
       document.getElementById('user-input').focus();
     };
     optContainer.appendChild(btn);
   });
 
-  // Render Word Chips for Sentence Building
   matched.words.forEach(w => {
     const chip = document.createElement('button');
     chip.className = 'word-chip';
@@ -156,7 +182,7 @@ async function loadNextTurn() {
   const res = await fetch(apiUrl('api/session/next-turn'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ learner_id: currentLearnerId })
+    body: JSON.stringify({ learner_id: currentLearnerId, target_language: targetLanguage })
   });
   const data = await res.json();
   currentPromptData = data;
@@ -166,8 +192,8 @@ async function loadNextTurn() {
   bubble.className = 'message-bubble ai';
   bubble.innerHTML = `
     <div>
-      <strong>${data.prompt_ja}</strong>
-      <button class="sound-btn" onclick="speakText('${data.prompt_ja}')" title="點擊發音 🔊">🔊</button>
+      <strong>${data.prompt_target_lang}</strong>
+      <button class="sound-btn" onclick="speakText('${data.prompt_target_lang}')" title="點擊發音 🔊">🔊</button>
     </div>
     <div class="trans">${data.prompt_en}</div>
     <div class="meta-tag">🎯 Target: ${data.target_skills.join(', ')}</div>
@@ -176,9 +202,7 @@ async function loadNextTurn() {
   chat.appendChild(bubble);
   chat.scrollTop = chat.scrollHeight;
 
-  // Render Beginner Scaffolding Chips
-  renderScaffolding(data.prompt_ja);
-
+  renderScaffolding(data.prompt_target_lang);
   document.getElementById('user-input').focus();
 }
 
@@ -190,27 +214,6 @@ async function submitResponse() {
   const input = document.getElementById('user-input');
   let text = input.value.trim();
   if (!text) return;
-
-  // Check if user input is Chinese (Beginner Intent translation)
-  const isChinese = /[一-龥]/.test(text) && !/[぀-ゟ゠-ヿ]/.test(text);
-  if (isChinese) {
-    // Map Chinese intent to Japanese realization automatically
-    if (text.includes("不去") || text.includes("不出門")) {
-      text = "明日雨が降ったら、行きません。";
-    } else if (text.includes("東京") || text.includes("住")) {
-      text = "東京に住みたいです。";
-    } else if (text.includes("拉麵") || text.includes("吃")) {
-      text = "ラーメンを食べたいです。";
-    } else if (text.includes("水")) {
-      text = "お水をください。";
-    } else if (text.includes("菜單")) {
-      text = "メニューをください。";
-    } else if (text.includes("去過")) {
-      text = "日本に行ったことがあります。";
-    } else {
-      text = "はい、そうです。";
-    }
-  }
 
   const latency = Date.now() - turnStartTime;
   input.value = '';
@@ -227,7 +230,7 @@ async function submitResponse() {
   const res = await fetch(apiUrl('api/session/submit'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ learner_id: currentLearnerId, response_text: text, latency_ms: latency })
+    body: JSON.stringify({ learner_id: currentLearnerId, target_language: targetLanguage, response_text: text, latency_ms: latency })
   });
   const data = await res.json();
 
@@ -241,8 +244,12 @@ async function submitResponse() {
 
 async function testIRTransform() {
   const text = document.getElementById('sandbox-input').value;
-  const isJa = /[　-〿぀-ゟ゠-ヿ＀-ﾟ一-龯]/.test(text);
-  const srcLang = isJa ? 'ja' : 'en';
+  let srcLang = 'en';
+  if (/[　-〿぀-ゟ゠-ヿ＀-ﾟ一-龯]/.test(text)) {
+    srcLang = 'ja';
+  } else if (/(\bsi\b|\bquiero\b|\bpor favor\b|\bhe estado\b|\bgracias\b)/i.test(text)) {
+    srcLang = 'es';
+  }
 
   const res = await fetch(apiUrl('api/transform'), {
     method: 'POST',
@@ -250,8 +257,9 @@ async function testIRTransform() {
     body: JSON.stringify({ source_language: srcLang, text_or_json: text, target_language: 'ir' })
   });
   const data = await res.json();
-  document.getElementById('sandbox-ja').innerText = data.japanese;
-  document.getElementById('sandbox-en').innerText = data.english;
+  document.getElementById('sandbox-ja').innerText = data.japanese || '--';
+  document.getElementById('sandbox-es').innerText = data.spanish || '--';
+  document.getElementById('sandbox-en').innerText = data.english || '--';
   document.getElementById('sandbox-ir').innerText = JSON.stringify(data.ir, null, 2);
 }
 
@@ -264,13 +272,16 @@ async function loadSkills() {
   data.universal_skills.forEach(u => {
     const card = document.createElement('div');
     card.className = 'skill-node';
-    const mappings = data.language_skills.filter(l => l.concept === u.concept);
+    const jaMappings = data.language_skills.filter(l => l.concept === u.concept && l.language === 'ja');
+    const esMappings = data.language_skills.filter(l => l.concept === u.concept && l.language === 'es');
+
     card.innerHTML = `
       <div class="skill-id">[${u.skill_id}]</div>
       <div style="font-weight:600; color:#fff;">${u.concept} - ${u.description}</div>
-      <div style="font-size:0.8rem; color:#94a3b8;">Utility: ${u.communication_utility} | Dependencies: ${u.dependencies.join(', ') || 'None'}</div>
-      <div style="margin-top:0.5rem;">
-        ${mappings.map(m => `<span class="message-bubble ai" style="display:inline-block; padding:0.2rem 0.5rem; font-size:0.75rem; margin-right:0.3rem;">🇯🇵 ${m.realization}</span>`).join('')}
+      <div style="font-size:0.8rem; color:#94a3b8;">Utility: ${u.communication_utility} | Unlock: ${u.unlock_value}</div>
+      <div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.3rem;">
+        ${jaMappings.map(m => `<span class="message-bubble ai" style="display:inline-block; padding:0.15rem 0.4rem; font-size:0.75rem;">🇯🇵 ${m.realization}</span>`).join('')}
+        ${esMappings.map(m => `<span class="message-bubble ai" style="display:inline-block; padding:0.15rem 0.4rem; font-size:0.75rem; border-color:rgba(255,184,0,0.4); color:#fbbf24;">🇪🇸 ${m.realization}</span>`).join('')}
       </div>
     `;
     container.appendChild(card);
@@ -278,7 +289,7 @@ async function loadSkills() {
 }
 
 async function loadProgress() {
-  const res = await fetch(apiUrl(`api/progress/${currentLearnerId}`));
+  const res = await fetch(apiUrl(`api/progress/${currentLearnerId}?target_language=${targetLanguage}`));
   const data = await res.json();
   const d = data.dimensions;
 
@@ -300,11 +311,11 @@ async function loadProgress() {
 
 async function runSim(turns) {
   const out = document.getElementById('sim-output');
-  out.innerText = `Running ${turns}-turn adaptive learning simulation...\n`;
+  out.innerText = `Running ${turns}-turn adaptive learning simulation (${targetLanguage.toUpperCase()})...\n`;
   const res = await fetch(apiUrl('api/simulation/run'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ learner_id: 'sim_runner', turns: turns })
+    body: JSON.stringify({ learner_id: 'sim_runner', target_language: targetLanguage, turns: turns })
   });
   const data = await res.json();
   out.innerText = `✅ Simulation Completed (${data.turns_completed} turns):\n\n` + JSON.stringify(data.history, null, 2);

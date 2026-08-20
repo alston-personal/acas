@@ -19,6 +19,17 @@
         <span>Universal Communication IR v0.1</span>
       </div>
     </div>
+    
+    <!-- Target Language Selector -->
+    <div style="display: flex; align-items: center; gap: 0.5rem; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-glow); padding: 0.35rem 0.75rem; border-radius: var(--radius-full);">
+      <span style="font-size: 0.8rem; color: var(--accent-cyan); font-weight: 600;">🎯 學習目標語言:</span>
+      <select id="target-language-select" onchange="changeTargetLanguage(this.value)" style="background: transparent; border: none; color: #fff; font-weight: 700; font-size: 0.85rem; outline: none; cursor: pointer;">
+        <option value="ja" style="background:#121929; color:#fff;">🇯🇵 日語 (Japanese)</option>
+        <option value="es" style="background:#121929; color:#fff;">🇪🇸 西班牙語 (Spanish - 推薦零基礎)</option>
+        <option value="en" style="background:#121929; color:#fff;">🇬🇧 英語 (English)</option>
+      </select>
+    </div>
+
     <nav>
       <button class="nav-btn active" onclick="switchTab('session-tab')">💬 Live Session</button>
       <button class="nav-btn" onclick="switchTab('ir-sandbox-tab')">⚡ IR Sandbox</button>
@@ -35,7 +46,7 @@
       <div class="session-grid">
         <div class="glass-card chat-container">
           <div class="card-title">
-            <span>🤖 Contextual Dialogue Interaction</span>
+            <span>🤖 Contextual Dialogue Interaction (<span id="current-lang-display" style="color:var(--accent-cyan);">🇯🇵 日語</span>)</span>
             <div style="margin-left: auto; display: flex; gap: 0.5rem; align-items: center;">
               <label style="font-size: 0.8rem; color: var(--accent-amber); display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
                 <input type="checkbox" id="beginner-mode-toggle" checked onchange="toggleBeginnerMode()">
@@ -51,19 +62,15 @@
             <div class="scaffolding-title">
               <span>🧩 初學者鷹架輔助 (點擊選項或拼詞作答)：</span>
             </div>
-            <div id="quick-options-container" class="chips-container">
-              <!-- Dynamically populated options -->
-            </div>
+            <div id="quick-options-container" class="chips-container"></div>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
               🧱 單詞積木拼句 (點擊拼裝)：
             </div>
-            <div id="word-chips-container" class="word-builder-box">
-              <!-- Dynamically populated word chips -->
-            </div>
+            <div id="word-chips-container" class="word-builder-box"></div>
           </div>
 
           <div class="chat-input-bar">
-            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入日文、中文意向，或點擊上方積木作答..." onkeypress="handleKeyPress(event)">
+            <input type="text" id="user-input" class="chat-input" placeholder="可直接輸入目標語言、中文意向，或點擊上方積木作答..." onkeypress="handleKeyPress(event)">
             <button class="btn-secondary" onclick="clearInput()" title="清空輸入框">重填</button>
             <button class="btn-primary" onclick="submitResponse()">Send ➔</button>
           </div>
@@ -105,20 +112,24 @@
       <div class="glass-card">
         <div class="card-title">⚡ Bidirectional IR Transformation Sandbox (Language A ↔ IR ↔ Language B)</div>
         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-          Demonstrates zero-leakage language-independence: Japanese and English map cleanly to the same Universal IR without language contamination.
+          多語言零洩漏驗證：無論輸入日語、西班牙語或英語，均即時映射至同一 Universal IR，再轉譯至其他自然語言。
         </p>
         <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-          <input type="text" id="sandbox-input" class="chat-input" value="明日雨が降ったら、行かない。" placeholder="Enter sentence in Japanese or English...">
+          <input type="text" id="sandbox-input" class="chat-input" value="明日雨が降ったら、行かない。" placeholder="輸入日語、西班牙語 (如: Si llueve mañana...) 或英語...">
           <button class="btn-primary" onclick="testIRTransform()">Transform ➔</button>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
           <div class="metric-box">
-            <div class="metric-label">Realized Japanese</div>
-            <div id="sandbox-ja" class="metric-val" style="font-size: 1rem; color: #fff; margin-top: 0.5rem;">--</div>
+            <div class="metric-label">🇯🇵 日語 (Japanese)</div>
+            <div id="sandbox-ja" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
           </div>
           <div class="metric-box">
-            <div class="metric-label">Realized English</div>
-            <div id="sandbox-en" class="metric-val" style="font-size: 1rem; color: #fff; margin-top: 0.5rem;">--</div>
+            <div class="metric-label">🇪🇸 西班牙語 (Spanish)</div>
+            <div id="sandbox-es" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">🇬🇧 英語 (English)</div>
+            <div id="sandbox-en" class="metric-val" style="font-size: 0.95rem; color: #fff; margin-top: 0.5rem;">--</div>
           </div>
         </div>
         <div style="margin-top: 1rem;">
@@ -131,7 +142,7 @@
     <!-- 3. Skill Graph Tab -->
     <section id="skills-tab" class="tab-pane">
       <div class="glass-card">
-        <div class="card-title">🧬 20 Universal Skills & Japanese Mappings</div>
+        <div class="card-title">🧬 20 Universal Skills & Multilingual Mappings (JA & ES)</div>
         <div id="skills-container" class="skills-grid"></div>
       </div>
     </section>
